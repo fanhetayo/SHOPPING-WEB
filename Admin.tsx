@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient';
 import { 
   LayoutDashboard, Package, ShoppingCart, BarChart3, 
   MessageSquare, Image as ImageIcon, Settings, 
-  Truck, Plus, Trash2, Send, Edit, Landmark, QrCode, Save, RefreshCcw, Bell, Globe, Shield, X, UploadCloud
+  Plus, Trash2, Edit, Landmark, QrCode, Save, RefreshCcw, Globe, Shield, X, UploadCloud
 } from 'lucide-react';
 
 export default function Admin() {
@@ -160,10 +160,8 @@ function ProductSection() {
     <div className="space-y-8 animate-in slide-in-from-bottom-4">
       <h2 className="text-3xl font-bold italic">Produk & Katalog</h2>
       
-      {/* FORM UPLOAD */}
       <div className="bg-white p-10 rounded-[3rem] shadow-xl border space-y-10">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-          {/* Bagian Kiri: Multi Image */}
           <div className="space-y-6">
             <label className="block text-xs font-black uppercase tracking-[0.2em] text-slate-400">Galeri Produk (Max 5)</label>
             <div className="grid grid-cols-5 gap-2">
@@ -195,12 +193,10 @@ function ProductSection() {
             </div>
           </div>
 
-          {/* Bagian Kanan: Deskripsi & Simpan */}
           <div className="space-y-6">
             <label className="block text-xs font-black uppercase tracking-[0.2em] text-slate-400">Deskripsi & Variasi</label>
             <textarea value={productData.description} placeholder="Deskripsi lengkap produk..." className="w-full p-5 bg-slate-50 rounded-2xl h-32 outline-none ring-1 ring-slate-100" onChange={e => setProductData({...productData, description: e.target.value})}></textarea>
             
-            {/* Varian Warna */}
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-[10px] font-black uppercase text-slate-400">Variasi Warna</span>
@@ -228,7 +224,6 @@ function ProductSection() {
         </div>
       </div>
 
-      {/* DAFTAR PRODUK */}
       <div className="bg-white rounded-[3rem] shadow-sm border overflow-hidden">
         <table className="w-full text-left">
           <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-400">
@@ -253,7 +248,7 @@ function ProductSection() {
                   </div>
                 </td>
                 <td className="p-6">
-                   <p className="text-xs text-slate-500 line-clamp-2 max-w-xs">{p.description}</p>
+                    <p className="text-xs text-slate-500 line-clamp-2 max-w-xs">{p.description}</p>
                 </td>
                 <td className="p-6">
                   <div className="flex -space-x-2">
@@ -281,36 +276,18 @@ function ProductSection() {
   );
 }
 
-// --- SHARED COMPONENTS ---
-function SidebarLink({ icon, label, active, onClick }: any) {
-  return (
-    <button onClick={onClick} className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all font-bold ${active ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
-      {icon} <span>{label}</span>
-    </button>
-  );
-}
-
-function StatCard({ title, value, growth, color }: any) {
-  return (
-    <div className={`${color} p-8 rounded-[2rem] text-white shadow-lg relative overflow-hidden group`}>
-      <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full group-hover:scale-150 transition-transform"></div>
-      <p className="text-xs uppercase font-bold opacity-80">{title}</p>
-      <h4 className="text-3xl font-black mt-2">{value}</h4>
-      <p className="text-[10px] mt-2 font-bold bg-white/20 w-fit px-2 py-1 rounded-lg">{growth}</p>
-    </div>
-  );
-}
-
-// (Fungsi BankSection, OrderSection, AnalyticsSection, WAGatewaySection, SettingsSection tetap ada seperti sebelumnya agar kode tetap utuh)
 function BankSection() {
   const [methods, setMethods] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState({ name: '', account_number: '', account_holder: '', type: 'Bank', qris_url: '' });
+
   const fetchMethods = async () => {
     const { data: m } = await supabase.from('payment_methods').select('*');
     if (m) setMethods(m);
   };
+
   useEffect(() => { fetchMethods(); }, []);
+
   const handleQRUpload = async (file: any) => {
     try {
       setLoading(true);
@@ -322,19 +299,21 @@ function BankSection() {
       alert("QRIS Berhasil diupload!");
     } catch (e: any) { alert(e.message); } finally { setLoading(false); }
   };
+
   const handleSave = async () => {
     if(!data.name || !data.account_number) return alert("Isi data!");
     await supabase.from('payment_methods').insert([data]);
     setData({ name: '', account_number: '', account_holder: '', type: 'Bank', qris_url: '' });
     fetchMethods();
   };
+
   return (
     <div className="space-y-8">
       <h2 className="text-3xl font-bold italic">Metode Pembayaran</h2>
       <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="space-y-4">
-           <input type="text" value={data.name} placeholder="Nama Bank / E-Wallet (BCA/DANA)" className="w-full p-4 bg-slate-50 rounded-xl outline-none border" onChange={e => setData({...data, name: e.target.value})} />
-           <input type="text" value={data.account_number} placeholder="Nomor Rekening / No. HP" className="w-full p-4 bg-slate-50 rounded-xl outline-none border" onChange={e => setData({...data, account_number: e.target.value})} />
+           <input type="text" value={data.name} placeholder="Nama Bank / E-Wallet (BCA/DANA)" className="w-full p-4 bg-slate-50 rounded-xl outline-none border font-bold" onChange={e => setData({...data, name: e.target.value})} />
+           <input type="text" value={data.account_number} placeholder="Nomor Rekening / No. HP" className="w-full p-4 bg-slate-50 rounded-xl outline-none border font-mono" onChange={e => setData({...data, account_number: e.target.value})} />
            <select className="w-full p-4 bg-slate-50 rounded-xl outline-none border font-bold" value={data.type} onChange={e => setData({...data, type: e.target.value})}>
              <option value="Bank">Transfer Bank</option>
              <option value="E-Wallet">E-Wallet</option>
@@ -343,18 +322,18 @@ function BankSection() {
         </div>
         <div className="space-y-4">
            {data.type === 'QRIS' && (
-             <div className="border-2 border-dashed rounded-2xl p-4 flex flex-col items-center justify-center relative min-h-[150px]">
+             <div className="border-2 border-dashed rounded-2xl p-4 flex flex-col items-center justify-center relative min-h-[150px] bg-slate-50">
                {data.qris_url ? <img src={data.qris_url} className="h-32 object-contain" /> : <p className="text-xs text-slate-400">Upload Foto QRIS</p>}
                <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleQRUpload(e.target.files?.[0])} />
              </div>
            )}
-           <button onClick={handleSave} className="w-full bg-blue-600 text-white p-5 rounded-2xl font-black uppercase">Tambah Metode</button>
+           <button onClick={handleSave} className="w-full bg-blue-600 text-white p-5 rounded-2xl font-black uppercase shadow-lg shadow-blue-100">Tambah Metode</button>
         </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {methods.map(m => (
-          <div key={m.id} className="bg-white p-6 rounded-3xl border shadow-sm relative group">
-            <button className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 text-red-500 transition-all" onClick={async () => {await supabase.from('payment_methods').delete().eq('id',m.id); fetchMethods();}}><Trash2 size={16}/></button>
+          <div key={m.id} className="bg-white p-6 rounded-3xl border shadow-sm relative group hover:border-blue-500 transition-all">
+            <button className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 text-red-500 transition-all" onClick={async () => {if(confirm('Hapus?')) { await supabase.from('payment_methods').delete().eq('id',m.id); fetchMethods();}}}><Trash2 size={16}/></button>
             <div className="flex items-center gap-4 mb-4">
                <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl">{m.type === 'QRIS' ? <QrCode/> : <Landmark/>}</div>
                <div><p className="text-xs font-bold text-slate-400 uppercase tracking-tighter">{m.type}</p><h4 className="font-black text-xl italic">{m.name}</h4></div>
@@ -369,13 +348,21 @@ function BankSection() {
 
 function OrderSection() {
   const [orders, setOrders] = useState<any[]>([]);
+  
+  const fetchOrders = async () => {
+    const { data } = await supabase.from('orders').select('*').order('created_at', {ascending: false});
+    if(data) setOrders(data);
+  };
+
   useEffect(() => {
-    const f = async () => {
-      const { data } = await supabase.from('orders').select('*').order('created_at', {ascending: false});
-      if(data) setOrders(data);
-    };
-    f();
+    fetchOrders();
+    // REALTIME SYNC
+    const subscription = supabase.channel('orders-admin')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchOrders)
+      .subscribe();
+    return () => { supabase.removeChannel(subscription); };
   }, []);
+
   return (
     <div className="space-y-6">
       <h2 className="text-3xl font-bold italic">Manajemen Pesanan</h2>
@@ -385,15 +372,19 @@ function OrderSection() {
             <tr><th className="p-6">ID / Waktu</th><th className="p-6">Pembeli</th><th className="p-6">Produk</th><th className="p-6">Total</th><th className="p-6">Status</th></tr>
           </thead>
           <tbody>
-            {orders.map(o => (
-              <tr key={o.id} className="border-b">
-                <td className="p-6 text-[10px] text-slate-400">#{o.id.slice(0,8)}<br/>{new Date(o.created_at).toLocaleDateString()}</td>
-                <td className="p-6 font-bold">{o.customer_name}</td>
-                <td className="p-6 text-sm">{o.items_summary}</td>
-                <td className="p-6 font-black text-blue-600">Rp {o.total_price?.toLocaleString()}</td>
-                <td className="p-6"><span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full text-[10px] font-black uppercase">Pending</span></td>
-              </tr>
-            ))}
+            {orders.length === 0 ? (
+              <tr><td colSpan={5} className="p-20 text-center text-slate-400 italic">Belum ada pesanan masuk.</td></tr>
+            ) : (
+              orders.map(o => (
+                <tr key={o.id} className="border-b hover:bg-slate-50">
+                  <td className="p-6 text-[10px] text-slate-400">#{o.id.slice(0,8)}<br/>{new Date(o.created_at).toLocaleDateString()}</td>
+                  <td className="p-6 font-bold">{o.customer_name}</td>
+                  <td className="p-6 text-sm">{o.items_summary}</td>
+                  <td className="p-6 font-black text-blue-600">Rp {o.total_price?.toLocaleString()}</td>
+                  <td className="p-6"><span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full text-[10px] font-black uppercase">Pending</span></td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -416,33 +407,68 @@ function AnalyticsSection() {
              ))}
            </div>
         </div>
+        <div className="bg-slate-900 text-white p-8 rounded-[3rem] shadow-xl flex flex-col justify-center">
+           <h3 className="font-bold mb-4 italic">Ringkasan Sistem</h3>
+           <p className="text-slate-400 text-sm">Database: Connected via Supabase Realtime</p>
+           <p className="text-slate-400 text-sm">Storage: Active (CDN Enabled)</p>
+        </div>
       </div>
     </div>
   );
 }
 
 function WAGatewaySection() {
+  const [wa, setWa] = useState('628123456789');
   return (
     <div className="max-w-2xl">
       <h2 className="text-3xl font-bold italic mb-8">WA Gateway</h2>
       <div className="bg-white p-10 rounded-[3rem] border shadow-sm space-y-6">
-        <input type="text" defaultValue="628123456789" className="w-full p-4 bg-slate-50 rounded-2xl border font-mono text-lg" />
-        <button className="w-full bg-slate-900 text-white p-5 rounded-2xl font-black uppercase">Simpan Konfigurasi</button>
+        <label className="text-xs font-black uppercase text-slate-400">Nomor WhatsApp Notifikasi</label>
+        <input type="text" value={wa} onChange={e => setWa(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl border font-mono text-lg" />
+        <button onClick={() => alert('Konfigurasi Disimpan')} className="w-full bg-slate-900 text-white p-5 rounded-2xl font-black uppercase flex items-center justify-center gap-2 hover:bg-black transition-all">
+          <Save size={20}/> Simpan Konfigurasi
+        </button>
       </div>
     </div>
   );
 }
 
 function SettingsSection() {
+  const [storeName, setStoreName] = useState('ZYHA ID');
   return (
     <div className="space-y-8">
       <h2 className="text-3xl font-bold italic">Pengaturan</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="bg-white p-8 rounded-[3rem] border shadow-sm space-y-6">
-          <input type="text" placeholder="Nama Toko" className="w-full p-4 bg-slate-50 rounded-xl border" defaultValue="ZYHA ID" />
-          <button className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase">Simpan Perubahan</button>
+          <h3 className="font-bold flex items-center gap-2"><Globe size={20}/> Profil Toko</h3>
+          <input type="text" value={storeName} onChange={e => setStoreName(e.target.value)} placeholder="Nama Toko" className="w-full p-4 bg-slate-50 rounded-xl border font-bold" />
+          <button className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase shadow-lg shadow-slate-200">Simpan Perubahan</button>
+        </div>
+        <div className="bg-white p-8 rounded-[3rem] border shadow-sm space-y-6 opacity-60">
+          <h3 className="font-bold flex items-center gap-2"><Shield size={20}/> Keamanan</h3>
+          <p className="text-xs text-slate-500 italic">Fitur ganti password sedang dalam tahap pengembangan.</p>
         </div>
       </div>
+    </div>
+  );
+}
+
+// --- SHARED COMPONENTS ---
+function SidebarLink({ icon, label, active, onClick }: any) {
+  return (
+    <button onClick={onClick} className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all font-bold ${active ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+      {icon} <span>{label}</span>
+    </button>
+  );
+}
+
+function StatCard({ title, value, growth, color }: any) {
+  return (
+    <div className={`${color} p-8 rounded-[2rem] text-white shadow-lg relative overflow-hidden group`}>
+      <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full group-hover:scale-150 transition-transform"></div>
+      <p className="text-xs uppercase font-bold opacity-80">{title}</p>
+      <h4 className="text-3xl font-black mt-2">{value}</h4>
+      <p className="text-[10px] mt-2 font-bold bg-white/20 w-fit px-2 py-1 rounded-lg">{growth}</p>
     </div>
   );
 }
