@@ -15,6 +15,19 @@ export default function App() {
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
   const [selectedVariant, setSelectedVariant] = useState<string>('');
 
+  // --- IMPLEMENTASI TAWK.TO ---
+  useEffect(() => {
+    var Tawk_API: any = Tawk_API || {}, Tawk_LoadStart = new Date();
+    (function(){
+      var s1 = document.createElement("script"), s0 = document.getElementsByTagName("script")[0];
+      s1.async = true;
+      s1.src = 'https://embed.tawk.to/69a85b337b02b21c3601f237/1jisq8guj';
+      s1.charset = 'UTF-8';
+      s1.setAttribute('crossorigin', '*');
+      s0.parentNode?.insertBefore(s1, s0);
+    })();
+  }, []);
+
   useEffect(() => {
     const getData = async () => {
       const { data: p } = await supabase.from('products').select('*');
@@ -249,25 +262,8 @@ export default function App() {
         </section>
       )}
 
-      {/* LIVE CHAT */}
-      <button className="fixed bottom-10 right-10 bg-slate-900 text-white p-5 rounded-3xl shadow-xl z-[150] flex items-center gap-3 border border-white/20" onClick={() => setIsLiveChatOpen(!isLiveChatOpen)}>
-        <MessageCircle size={30} className="fill-blue-500 text-blue-500" />
-        <span className="font-black text-sm tracking-widest">LIVE HELP</span>
-      </button>
-
-      {isLiveChatOpen && (
-        <div className="fixed bottom-32 right-10 w-96 bg-white shadow-2xl rounded-3xl z-[150] overflow-hidden border border-slate-100 animate-in slide-in-from-bottom-10">
-           <div className="bg-slate-900 p-6 text-white flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-emerald-500 flex items-center justify-center font-bold">ZY</div>
-              <div><p className="font-bold">ZYHA ID CS</p><p className="text-xs text-emerald-400">Online</p></div>
-           </div>
-           <div className="h-80 bg-slate-50 p-6 flex items-center justify-center text-slate-400 italic text-sm">Hubungkan dengan WhatsApp Anda.</div>
-           <div className="p-4 bg-white flex gap-2 border-t">
-              <input type="text" placeholder="Ketik pesan..." className="flex-1 p-3 bg-slate-100 rounded-xl outline-none" />
-              <button className="bg-blue-600 text-white p-3 rounded-xl"><Send size={20}/></button>
-           </div>
-        </div>
-      )}
+      {/* FOOTER SPACER (Optional: Memberikan ruang agar Tawk.to tidak menutupi konten penting) */}
+      <div className="h-20"></div>
     </div>
   );
 }
