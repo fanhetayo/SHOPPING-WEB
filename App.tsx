@@ -299,7 +299,7 @@ function ProductDisplay({ product, onClick, onAdd }: any) {
   return (
     <div className="group">
        <div className="relative aspect-[4/5] bg-slate-100 rounded-[2.5rem] overflow-hidden mb-6 shadow-sm cursor-pointer" onClick={onClick}>
-          <ImageSlider images={product.images && product.images.length > 0 ? product.images : [product.image_url]} />
+          <ImageSlider images={product.images && product.images.length > 0 ? product.images : [product.images]} />
           <button onClick={(e) => { e.stopPropagation(); onAdd(); }} className="absolute bottom-6 right-6 p-4 bg-slate-900 text-white rounded-2xl opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0 transition-all duration-300 shadow-xl z-10">
              <Plus />
           </button>
