@@ -14,14 +14,12 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
   const [selectedVariant, setSelectedVariant] = useState<string>('');
-  
-  // State untuk Form Checkout
-  const [customerInfo, setCustomerInfo] = useState({
-    name: '',
-    address: '',
-    phone: ''
-  });
-  const [selectedPaymentId, setSelectedPaymentId] = useState<string>('');
+
+  // State Form Checkout
+  const [customerName, setCustomerName] = useState('');
+  const [customerAddress, setCustomerAddress] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [selectedPayment, setSelectedPayment] = useState<any>(null);
 
   // --- IMPLEMENTASI TAWK.TO ---
   useEffect(() => {
@@ -76,36 +74,50 @@ export default function App() {
     window.scrollTo(0,0);
   };
 
-  // --- FITUR WHATSAPP CHECKOUT ---
-  const handleConfirmPayment = () => {
-    if (!customerInfo.name || !customerInfo.address || !customerInfo.phone) {
-      return alert("Mohon lengkapi data pengiriman Anda!");
-    }
-    if (!selectedPaymentId) {
-      return alert("Pilih metode pembayaran terlebih dahulu!");
+  // --- FITUR WHATSAPP & SAVE TO DATABASE ---
+  const handleConfirmPayment = async () => {
+    if (!customerName || !customerAddress || !customerPhone || !selectedPayment) {
+      return alert("Mohon lengkapi data diri dan pilih metode pembayaran!");
     }
 
-    const selectedMethod = paymentMethods.find(m => m.id === selectedPaymentId);
-    
-    // Format Pesan WA
-    const productDetails = cart.map((item, index) => 
-      `${index + 1}. ${item.title} [${item.selectedVariant || 'No Variant'}] - Rp ${item.price.toLocaleString()}`
-    ).join('\n');
+    try {
+      // 1. Simpan ke Database (Agar masuk ke Admin.tsx)
+      const { error } = await supabase.from('orders').insert([{
+        customer_name: customerName,
+        customer_address: customerAddress,
+        customer_phone: customerPhone,
+        items: cart,
+        total_price: totalPrice,
+        payment_method: selectedPayment.name,
+        status: 'pending'
+      }]);
 
-    const message = `*PESANAN BARU - ZYHA ID*%0A` +
-                    `----------------------------------%0A` +
-                    `*Data Pengiriman:*%0A` +
-                    `Nama: ${customerInfo.name}%0A` +
-                    `No. WA: ${customerInfo.phone}%0A` +
-                    `Alamat: ${customerInfo.address}%0A%0A` +
-                    `*Daftar Produk:*%0A${encodeURIComponent(productDetails)}%0A%0A` +
-                    `*Metode Bayar:* ${selectedMethod?.name}%0A` +
-                    `*Total Tagihan:* *Rp ${totalPrice.toLocaleString()}*%0A` +
-                    `----------------------------------%0A` +
-                    `Mohon segera diproses, terima kasih!`;
+      if (error) throw error;
 
-    const adminPhone = "6285774076557"; // Silakan ganti dengan nomor WA Admin Anda
-    window.open(`https://wa.me/${adminPhone}?text=${message}`, '_blank');
+      // 2. Format Pesan WhatsApp
+      const adminWA = "628123456789"; // GANTI DENGAN NOMOR WA ANDA
+      const itemText = cart.map(it => `- ${it.title} (${it.selectedVariant || 'Default'}): Rp ${it.price.toLocaleString()}`).join('%0A');
+      
+      const message = `*PESANAN BARU - ZYHA ID*%0A%0A` +
+                      `*Data Pelanggan:*%0A` +
+                      `Nama: ${customerName}%0A` +
+                      `Alamat: ${customerAddress}%0A` +
+                      `No. WA: ${customerPhone}%0A%0A` +
+                      `*Detail Pesanan:*%0A${itemText}%0A%0A` +
+                      `*Total Tagihan:* Rp ${totalPrice.toLocaleString()}%0A` +
+                      `*Metode Bayar:* ${selectedPayment.name}%0A%0A` +
+                      `Mohon segera diproses. Terima kasih!`;
+
+      // 3. Redirect ke WA & Reset State
+      window.open(`https://wa.me/${adminWA}?text=${message}`, '_blank');
+      setCart([]);
+      setView('shop');
+      alert("Pesanan terkirim ke admin! Silakan konfirmasi di WhatsApp.");
+
+    } catch (err) {
+      console.error(err);
+      alert("Gagal memproses pesanan.");
+    }
   };
 
   return (
@@ -257,47 +269,23 @@ export default function App() {
             <div className="space-y-6">
               <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
                 <h3 className="font-bold mb-4 flex items-center gap-2"><User size={18}/> Detail Pengiriman</h3>
-                <input 
-                  type="text" 
-                  placeholder="Nama Lengkap" 
-                  className="w-full p-4 bg-slate-50 rounded-xl mb-3 outline-none ring-1 ring-slate-100 focus:ring-blue-500" 
-                  value={customerInfo.name}
-                  onChange={(e) => setCustomerInfo({...customerInfo, name: e.target.value})}
-                />
-                <input 
-                  type="text" 
-                  placeholder="Alamat Lengkap" 
-                  className="w-full p-4 bg-slate-50 rounded-xl mb-3 outline-none ring-1 ring-slate-100 focus:ring-blue-500" 
-                  value={customerInfo.address}
-                  onChange={(e) => setCustomerInfo({...customerInfo, address: e.target.value})}
-                />
-                <input 
-                  type="text" 
-                  placeholder="Nomor WhatsApp (Aktif)" 
-                  className="w-full p-4 bg-slate-50 rounded-xl outline-none ring-1 ring-slate-100 focus:ring-blue-500" 
-                  value={customerInfo.phone}
-                  onChange={(e) => setCustomerInfo({...customerInfo, phone: e.target.value})}
-                />
+                <input type="text" placeholder="Nama Lengkap" value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="w-full p-4 bg-slate-50 rounded-xl mb-3 outline-none ring-1 ring-slate-100 focus:ring-blue-500" />
+                <input type="text" placeholder="Alamat Lengkap" value={customerAddress} onChange={(e) => setCustomerAddress(e.target.value)} className="w-full p-4 bg-slate-50 rounded-xl mb-3 outline-none ring-1 ring-slate-100 focus:ring-blue-500" />
+                <input type="text" placeholder="Nomor WhatsApp" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} className="w-full p-4 bg-slate-50 rounded-xl outline-none ring-1 ring-slate-100 focus:ring-blue-500" />
               </div>
               <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
                 <h3 className="font-bold mb-4 flex items-center gap-2"><CreditCard size={18}/> Pilih Metode Bayar</h3>
                 <div className="space-y-3">
                   {paymentMethods.map(m => (
-                    <div 
-                      key={m.id} 
-                      onClick={() => setSelectedPaymentId(m.id)}
-                      className={`p-4 border rounded-2xl flex justify-between items-center cursor-pointer transition-all ${selectedPaymentId === m.id ? 'border-blue-500 bg-blue-50' : 'hover:border-slate-300'}`}
-                    >
+                    <div key={m.id} onClick={() => setSelectedPayment(m)} className={`p-4 border rounded-2xl flex justify-between items-center cursor-pointer transition-all ${selectedPayment?.id === m.id ? 'border-blue-600 bg-blue-50' : 'hover:border-blue-500'}`}>
                       <div className="flex items-center gap-3">
-                        {m.type === 'Bank' ? <Landmark className={selectedPaymentId === m.id ? 'text-blue-600' : ''} /> : <QrCode className={selectedPaymentId === m.id ? 'text-blue-600' : ''}/>}
+                        {m.type === 'Bank' ? <Landmark className={selectedPayment?.id === m.id ? 'text-blue-600' : ''} /> : <QrCode className={selectedPayment?.id === m.id ? 'text-blue-600' : ''} />}
                         <div>
-                          <p className={`font-bold text-sm ${selectedPaymentId === m.id ? 'text-blue-600' : ''}`}>{m.name}</p>
+                          <p className={`font-bold text-sm ${selectedPayment?.id === m.id ? 'text-blue-600' : ''}`}>{m.name}</p>
                           <p className="text-xs text-slate-500">{m.account_number}</p>
                         </div>
                       </div>
-                      <div className={`w-5 h-5 rounded-full border-2 transition-all ${selectedPaymentId === m.id ? 'border-blue-600 bg-blue-600' : 'border-slate-200'}`}>
-                        {selectedPaymentId === m.id && <div className="w-full h-full flex items-center justify-center text-white text-[10px]">✓</div>}
-                      </div>
+                      <div className={`w-5 h-5 rounded-full border-2 ${selectedPayment?.id === m.id ? 'border-blue-600 bg-blue-600' : 'border-slate-200'}`}></div>
                     </div>
                   ))}
                 </div>
@@ -320,13 +308,9 @@ export default function App() {
                   <span className="text-blue-400">Rp {totalPrice.toLocaleString()}</span>
                 </div>
               </div>
-              <button 
-                onClick={handleConfirmPayment}
-                className="w-full bg-blue-600 py-5 rounded-2xl font-black text-lg hover:bg-blue-700 transition-all flex items-center justify-center gap-3"
-              >
-                <MessageCircle size={22} /> KONFIRMASI WHATSAPP
+              <button onClick={handleConfirmPayment} className="w-full bg-blue-600 py-5 rounded-2xl font-black text-lg hover:bg-blue-700 transition-all flex items-center justify-center gap-2">
+                <MessageCircle size={20} /> BAYAR SEKARANG (WA)
               </button>
-              <p className="text-[10px] text-slate-400 mt-4 text-center">Klik tombol di atas untuk mengirim detail pesanan ke Admin via WhatsApp.</p>
             </div>
           </div>
         </section>
