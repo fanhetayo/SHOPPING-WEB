@@ -104,7 +104,7 @@ export default function App() {
                     `----------------------------------%0A` +
                     `Mohon segera diproses, terima kasih!`;
 
-    const adminPhone = "6281234567890"; // Silakan ganti dengan nomor WA Admin Anda
+    const adminPhone = "6285774076557"; // Silakan ganti dengan nomor WA Admin Anda
     window.open(`https://wa.me/${adminPhone}?text=${message}`, '_blank');
   };
 
