@@ -92,7 +92,7 @@ export default function App() {
               <span className="text-blue-400 font-black tracking-[0.5em] uppercase mb-4 text-sm animate-pulse">Edisi Terbatas</span>
               <h2 className="text-7xl font-black text-white max-w-2xl leading-[1.1] mb-8 italic">STEP INTO THE FUTURE.</h2>
               <button className="bg-white text-slate-900 px-10 py-5 rounded-2xl font-black w-fit hover:bg-blue-600 hover:text-white transition-all shadow-2xl flex items-center gap-4 group/btn">
-                 BELANJA KOLEKSI <ChevronRight className="group-hover/btn:translate-x-2 transition-transform" />
+                  BELANJA KOLEKSI <ChevronRight className="group-hover/btn:translate-x-2 transition-transform" />
               </button>
            </div>
            <div className="absolute bottom-10 right-10 flex gap-3">
