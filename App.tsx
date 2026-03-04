@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { 
   ShoppingBag, Search, MessageCircle, Star, 
-  ChevronRight, ArrowRight, User, Heart, X, Trash2, Send
+  ChevronRight, ArrowRight, User, Heart, X, Trash2, Send, Plus
 } from 'lucide-react';
 
 export default function App() {
