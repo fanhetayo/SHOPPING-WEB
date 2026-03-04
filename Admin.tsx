@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient'; // Menghubungkan ke API Anda
 import { 
   LayoutDashboard, Package, ShoppingCart, BarChart3, 
   MessageSquare, Image as ImageIcon, Settings, Printer, 
-  Truck, Plus, Trash2, Save, Send, Eye
+  Truck, Plus, Trash2, Save, Send, Eye, Edit
 } from 'lucide-react';
 
 // --- MAIN COMPONENT ---
@@ -56,13 +56,24 @@ export default function Admin() {
 // --- SUB-COMPONENTS ---
 
 function DashboardSection() {
+  const [stats, setStats] = useState({ revenue: 0, orders: 0, lowStock: 0 });
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      const { data: orders } = await supabase.from('orders').select('total_price');
+      const totalRev = orders?.reduce((acc, curr) => acc + (curr.total_price || 0), 0) || 0;
+      setStats({ revenue: totalRev, orders: orders?.length || 0, lowStock: 5 });
+    };
+    fetchStats();
+  }, []);
+
   return (
     <div>
       <h2 className="text-3xl font-bold mb-8">Dashboard Overview</h2>
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
-        <StatCard title="Total Pendapatan" value="Rp 128.450.000" growth="+15%" color="bg-blue-600" />
-        <StatCard title="Pesanan Baru" value="24" growth="Hari ini" color="bg-emerald-600" />
-        <StatCard title="Stok Menipis" value="5" growth="Perlu restok" color="bg-orange-600" />
+        <StatCard title="Total Pendapatan" value={`Rp ${stats.revenue.toLocaleString()}`} growth="+15%" color="bg-blue-600" />
+        <StatCard title="Pesanan Baru" value={stats.orders.toString()} growth="Hari ini" color="bg-emerald-600" />
+        <StatCard title="Stok Menipis" value={stats.lowStock.toString()} growth="Perlu restok" color="bg-orange-600" />
         <StatCard title="Visitor Real-time" value="1,204" growth="+5%" color="bg-indigo-600" />
       </div>
       <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 h-96 flex items-center justify-center italic text-slate-400 text-lg">
@@ -73,21 +84,43 @@ function DashboardSection() {
 }
 
 function ProductSection() {
-  // Logic untuk upload ke database Anda
-  const [productData, setProductData] = useState({ title: '', price: 0, description: '' });
-  
+  const [products, setProducts] = useState<any[]>([]);
+  const [editingId, setEditingId] = useState<any>(null);
+  const [productData, setProductData] = useState({ title: '', price: 0, description: '', category: 'Sepatu Pria' });
+
+  const fetchProducts = async () => {
+    const { data } = await supabase.from('products').select('*').order('created_at', { ascending: false });
+    if (data) setProducts(data);
+  };
+
+  useEffect(() => { fetchProducts(); }, []);
+
   const handleUpload = async () => {
-    const { error } = await supabase.from('products').insert([productData]);
-    if (error) alert(error.message); else alert("Produk Terupload ke Supabase!");
+    if (!productData.title || !productData.price) return alert("Mohon isi judul dan harga!");
+    
+    if (editingId) {
+      const { error } = await supabase.from('products').update(productData).eq('id', editingId);
+      if (error) alert(error.message); else { alert("Produk Diperbarui!"); setEditingId(null); }
+    } else {
+      const { error } = await supabase.from('products').insert([productData]);
+      if (error) alert(error.message); else alert("Produk Terupload!");
+    }
+    setProductData({ title: '', price: 0, description: '', category: 'Sepatu Pria' });
+    fetchProducts();
+  };
+
+  const deleteProduct = async (id: any) => {
+    if (confirm("Hapus produk ini?")) {
+      await supabase.from('products').delete().eq('id', id);
+      fetchProducts();
+    }
   };
 
   return (
     <div className="space-y-8">
       <div className="flex justify-between items-center">
         <h2 className="text-3xl font-bold">Produk & Kategori</h2>
-        <button className="bg-blue-600 text-white px-6 py-3 rounded-2xl flex items-center gap-2 font-bold hover:bg-blue-700 shadow-lg shadow-blue-200">
-          <Plus size={20}/> Tambah Produk Baru
-        </button>
+        {editingId && <button onClick={() => {setEditingId(null); setProductData({title:'', price:0, description:'', category:'Sepatu Pria'})}} className="bg-slate-500 text-white px-4 py-2 rounded-xl text-xs">Batal Edit</button>}
       </div>
       
       <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 grid grid-cols-2 gap-10">
@@ -100,24 +133,47 @@ function ProductSection() {
                 </div>
               ))}
            </div>
-           <input type="text" placeholder="Judul Produk" className="w-full p-4 bg-slate-50 rounded-xl border-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 outline-none" onChange={(e)=>setProductData({...productData, title: e.target.value})} />
-           <textarea placeholder="Deskripsi Lengkap Produk..." className="w-full p-4 bg-slate-50 rounded-xl border-none ring-1 ring-slate-200 h-40 outline-none" onChange={(e)=>setProductData({...productData, description: e.target.value})}></textarea>
+           <input type="text" value={productData.title} placeholder="Judul Produk" className="w-full p-4 bg-slate-50 rounded-xl border-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 outline-none" onChange={(e)=>setProductData({...productData, title: e.target.value})} />
+           <textarea value={productData.description} placeholder="Deskripsi Lengkap Produk..." className="w-full p-4 bg-slate-50 rounded-xl border-none ring-1 ring-slate-200 h-40 outline-none" onChange={(e)=>setProductData({...productData, description: e.target.value})}></textarea>
         </div>
         <div className="space-y-4">
-           <select className="w-full p-4 bg-slate-50 rounded-xl border-none ring-1 ring-slate-200 outline-none">
-              <option>Pilih Kategori Lengkap</option>
-              <option>Sepatu Pria</option>
-              <option>Pakaian Wanita</option>
-              <option>Aksesoris Premium</option>
+           <select value={productData.category} className="w-full p-4 bg-slate-50 rounded-xl border-none ring-1 ring-slate-200 outline-none" onChange={(e)=>setProductData({...productData, category: e.target.value})}>
+              <option value="Sepatu Pria">Sepatu Pria</option>
+              <option value="Pakaian Wanita">Pakaian Wanita</option>
+              <option value="Aksesoris Premium">Aksesoris Premium</option>
            </select>
-           <input type="number" placeholder="Harga (Rp)" className="w-full p-4 bg-slate-50 rounded-xl border-none ring-1 ring-slate-200 outline-none" onChange={(e)=>setProductData({...productData, price: parseInt(e.target.value)})} />
+           <input type="number" value={productData.price || ''} placeholder="Harga (Rp)" className="w-full p-4 bg-slate-50 rounded-xl border-none ring-1 ring-slate-200 outline-none" onChange={(e)=>setProductData({...productData, price: parseInt(e.target.value)})} />
            <input type="number" placeholder="Berat (Gram) - Untuk Ongkir" className="w-full p-4 bg-slate-50 rounded-xl border-none ring-1 ring-slate-200 outline-none" />
-           <div className="flex items-center gap-3 p-4 bg-blue-50 rounded-xl border border-blue-100">
-              <input type="checkbox" className="w-5 h-5" id="bestseller" />
-              <label htmlFor="bestseller" className="font-bold text-blue-800 uppercase text-xs tracking-wider">Tandai Sebagai Best Seller</label>
-           </div>
-           <button onClick={handleUpload} className="w-full bg-slate-900 text-white p-5 rounded-2xl font-black text-lg hover:bg-black transition-all">UPLOAD PRODUK KE DATABASE</button>
+           <button onClick={handleUpload} className="w-full bg-slate-900 text-white p-5 rounded-2xl font-black text-lg hover:bg-black transition-all uppercase">
+             {editingId ? 'Simpan Perubahan' : 'Upload ke Database'}
+           </button>
         </div>
+      </div>
+
+      <div className="bg-white rounded-3xl shadow-sm border overflow-hidden">
+        <table className="w-full text-left">
+          <thead className="bg-slate-50 border-b">
+            <tr>
+              <th className="p-4 text-xs font-black uppercase">Produk</th>
+              <th className="p-4 text-xs font-black uppercase">Kategori</th>
+              <th className="p-4 text-xs font-black uppercase">Harga</th>
+              <th className="p-4 text-center text-xs font-black uppercase">Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {products.map(p => (
+              <tr key={p.id} className="border-b last:border-0 hover:bg-slate-50">
+                <td className="p-4 font-bold text-sm">{p.title}</td>
+                <td className="p-4 text-xs text-slate-500">{p.category}</td>
+                <td className="p-4 font-black text-blue-600 text-sm">Rp {p.price?.toLocaleString()}</td>
+                <td className="p-4 flex justify-center gap-2">
+                  <button onClick={() => {setEditingId(p.id); setProductData({title:p.title, price:p.price, description:p.description, category:p.category})}} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit size={18}/></button>
+                  <button onClick={() => deleteProduct(p.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={18}/></button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -126,20 +182,25 @@ function ProductSection() {
 function OrderSection() {
   const [orders, setOrders] = useState<any[]>([]);
 
-  useEffect(() => {
-    // REALTIME SUBSCRIPTION UNTUK PESANAN
-    const fetchAndSubscribe = async () => {
-      const { data } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
-      if (data) setOrders(data);
+  const fetchOrders = async () => {
+    const { data } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
+    if (data) setOrders(data);
+  };
 
-      supabase.channel('custom-all-channel')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
-        // Update state secara realtime jika ada data masuk
-        if (payload.eventType === 'INSERT') setOrders(prev => [payload.new, ...prev]);
-      }).subscribe();
-    };
-    fetchAndSubscribe();
+  useEffect(() => {
+    fetchOrders();
+    const channel = supabase.channel('order-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchOrders())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, []);
+
+  const deleteOrder = async (id: any) => {
+    if (confirm("Hapus data pesanan ini?")) {
+      await supabase.from('orders').delete().eq('id', id);
+      fetchOrders();
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -149,39 +210,39 @@ function OrderSection() {
           <thead className="bg-slate-900 text-white">
             <tr>
               <th className="p-6">Informasi Pembeli</th>
-              <th className="p-6">Produk</th>
+              <th className="p-6">Total Tagihan</th>
               <th className="p-6">Ekspedisi</th>
-              <th className="p-6">Status Real-time</th>
+              <th className="p-6">Status</th>
               <th className="p-6 text-center">Aksi</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {/* Map data dari Supabase Anda */}
             {orders.length > 0 ? orders.map(order => (
               <tr key={order.id} className="hover:bg-slate-50 transition-colors">
                 <td className="p-6">
-                  <p className="font-black text-slate-800">{order.customer_name}</p>
-                  <p className="text-xs text-slate-500">{order.full_address}</p>
-                  <p className="text-xs font-bold text-blue-600">{order.customer_phone}</p>
+                  <p className="font-black text-slate-800">{order.customer_name || 'No Name'}</p>
+                  <p className="text-xs text-slate-500">{order.customer_phone || '-'}</p>
                 </td>
-                <td className="p-6 font-medium italic">Produk dari JSONB</td>
+                <td className="p-6 font-black text-blue-600 italic">Rp {order.total_price?.toLocaleString()}</td>
                 <td className="p-6">
-                  <div className="flex items-center gap-2 font-bold text-red-600 italic">
+                  <div className="flex items-center gap-2 font-bold text-red-600 italic text-sm">
                      <Truck size={18}/> {order.courier_name || 'J&T Express'}
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-1">Automatic Tracking Active</p>
                 </td>
                 <td className="p-6">
-                  <span className="bg-yellow-100 text-yellow-700 px-4 py-1.5 rounded-full text-[10px] font-black uppercase">{order.status}</span>
+                  <span className="bg-yellow-100 text-yellow-700 px-4 py-1.5 rounded-full text-[10px] font-black uppercase">{order.status || 'PENDING'}</span>
                 </td>
-                <td className="p-6 text-center">
-                  <button className="bg-emerald-600 text-white p-3 rounded-xl hover:bg-emerald-700 flex items-center gap-2 text-xs font-bold" onClick={() => alert('Integrasi Resi Automatis')}>
-                    <Send size={14}/> PROSES & RESI
+                <td className="p-6 flex justify-center gap-3">
+                  <button className="bg-emerald-600 text-white p-2.5 rounded-xl hover:bg-emerald-700 shadow-lg shadow-emerald-100" title="Proses Resi">
+                    <Send size={16}/>
+                  </button>
+                  <button onClick={() => deleteOrder(order.id)} className="bg-slate-100 text-slate-400 p-2.5 rounded-xl hover:bg-red-500 hover:text-white transition-all" title="Hapus Pesanan">
+                    <Trash2 size={16}/>
                   </button>
                 </td>
               </tr>
             )) : (
-              <tr><td colSpan={5} className="p-10 text-center italic text-slate-400">Menunggu data pesanan masuk secara realtime...</td></tr>
+              <tr><td colSpan={5} className="p-10 text-center italic text-slate-400">Belum ada pesanan masuk.</td></tr>
             )}
           </tbody>
         </table>
@@ -218,7 +279,7 @@ function WAGatewaySection() {
         <div className="p-4 bg-emerald-500 text-white rounded-2xl"><MessageSquare size={32}/></div>
         <div>
           <h2 className="text-2xl font-bold italic">WhatsApp Gateway</h2>
-          <p className="text-slate-500">Kirim notifikasi otomatis (Resi & Pembayaran) via WA</p>
+          <p className="text-slate-500">Kirim notifikasi otomatis via WA</p>
         </div>
       </div>
       <div className="p-6 bg-slate-900 text-white rounded-3xl font-mono text-sm">
@@ -234,14 +295,10 @@ function SettingsSection() {
   return (
     <div className="max-w-3xl">
       <h2 className="text-3xl font-bold mb-8 italic">Pengaturan Global</h2>
-      <div className="space-y-6">
-         <div className="bg-white p-8 rounded-3xl border shadow-sm space-y-4">
-            <h3 className="font-bold border-b pb-4">Integrasi Payment Gateway (Midtrans/Xendit)</h3>
-            <input type="text" placeholder="Server Key" className="w-full p-4 bg-slate-50 rounded-xl outline-none ring-1 ring-slate-100" />
-            <div className="flex gap-4">
-              <button className="flex-1 bg-blue-600 text-white p-4 rounded-xl font-bold">Simpan Kunci API</button>
-            </div>
-         </div>
+      <div className="bg-white p-8 rounded-3xl border shadow-sm space-y-4">
+        <h3 className="font-bold border-b pb-4">Integrasi Payment Gateway</h3>
+        <input type="text" placeholder="Server Key" className="w-full p-4 bg-slate-50 rounded-xl outline-none ring-1 ring-slate-100" />
+        <button className="w-full bg-blue-600 text-white p-4 rounded-xl font-bold">Simpan Kunci API</button>
       </div>
     </div>
   );
