@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
+// PERBAIKAN: Mengubah 'lucide-center' menjadi 'lucide-react'
 import { 
   LayoutDashboard, Package, ShoppingCart, BarChart3, 
   MessageSquare, Image as ImageIcon, Settings, 
   Truck, Plus, Trash2, Send, Edit, Landmark, QrCode, Save, RefreshCcw, Bell, Globe, Shield
-} from 'lucide-center';
+} from 'lucide-react';
 
 export default function Admin() {
   const [view, setView] = useState('dashboard');
