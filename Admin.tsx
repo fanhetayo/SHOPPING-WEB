@@ -76,7 +76,7 @@ function ProductSection() {
   const [products, setProducts] = useState<any[]>([]);
   const [editingId, setEditingId] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const [productData, setProductData] = useState({ title: '', price: 0, description: '', category: 'Sepatu', image_url: '' });
+  const [productData, setProductData] = useState({ title: '', price: 0, description: '', category: '', image_url: '' });
 
   const fetchProducts = async () => {
     const { data } = await supabase.from('products').select('*').order('created_at', { ascending: false });
