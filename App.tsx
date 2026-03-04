@@ -164,8 +164,14 @@ export default function App() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-16">
             <div className="space-y-6">
               <div className="rounded-[3rem] overflow-hidden shadow-2xl bg-slate-100 aspect-square">
-                <ImageSlider images={selectedProduct.images || [selectedProduct.image_url]} />
-              </div>
+  <ImageSlider 
+    images={
+      selectedProduct.images && Array.isArray(selectedProduct.images) && selectedProduct.images.length > 0 
+      ? selectedProduct.images 
+      : [selectedProduct.image_url || selectedProduct.image] 
+    } 
+  />
+</div>
             </div>
             <div className="space-y-8">
               <div>
