@@ -17,15 +17,15 @@ export default function App() {
 
   // --- IMPLEMENTASI TAWK.TO ---
   useEffect(() => {
-    var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
-(function(){
-var s1=document.createElement("script"),s0=document.getElementsByTagName("script")[0];
-s1.async=true;
-s1.src='https://embed.tawk.to/69a85b337b02b21c3601f237/1jisr726s';
-s1.charset='UTF-8';
-s1.setAttribute('crossorigin','*');
-s0.parentNode.insertBefore(s1,s0);
-})();
+    var Tawk_API: any = Tawk_API || {}, Tawk_LoadStart = new Date();
+    (function(){
+      var s1 = document.createElement("script"), s0 = document.getElementsByTagName("script")[0];
+      s1.async = true;
+      s1.src = 'https://embed.tawk.to/69a85b337b02b21c3601f237/1jisr726s';
+      s1.charset = 'UTF-8';
+      s1.setAttribute('crossorigin', '*');
+      s0.parentNode?.insertBefore(s1, s0);
+    })();
   }, []);
 
   useEffect(() => {
@@ -164,7 +164,7 @@ s0.parentNode.insertBefore(s1,s0);
           <div className="grid grid-cols-1 md:grid-cols-2 gap-16">
             <div className="space-y-6">
               <div className="rounded-[3rem] overflow-hidden shadow-2xl bg-slate-100 aspect-square">
-                <ImageSlider images={selectedProduct.images || [selectedProduct.images]} />
+                <ImageSlider images={selectedProduct.images || [selectedProduct.image_url]} />
               </div>
             </div>
             <div className="space-y-8">
@@ -262,7 +262,7 @@ s0.parentNode.insertBefore(s1,s0);
         </section>
       )}
 
-      {/* FOOTER SPACER (Optional: Memberikan ruang agar Tawk.to tidak menutupi konten penting) */}
+      {/* FOOTER SPACER */}
       <div className="h-20"></div>
     </div>
   );
@@ -270,24 +270,29 @@ s0.parentNode.insertBefore(s1,s0);
 
 // --- SUB COMPONENTS ---
 
-function ImageSlider({ images }: { images: string[] }) {
+function ImageSlider({ images }: { images: any }) {
   const [current, setCurrent] = useState(0);
+  
+  // Safety Guard: Memastikan data images adalah array sebelum di-map
+  const safeImages = Array.isArray(images) ? images : (images ? [images] : []);
 
   useEffect(() => {
-    if (images.length <= 1) return;
+    if (safeImages.length <= 1) return;
     const timer = setInterval(() => {
-      setCurrent(prev => (prev === images.length - 1 ? 0 : prev + 1));
+      setCurrent(prev => (prev === safeImages.length - 1 ? 0 : prev + 1));
     }, 4000);
     return () => clearInterval(timer);
-  }, [images]);
+  }, [safeImages]);
+
+  if (safeImages.length === 0) return <div className="w-full h-full bg-slate-100" />;
 
   return (
     <div className="relative w-full h-full group">
-      {images.map((img, idx) => (
+      {safeImages.map((img: string, idx: number) => (
         <img key={idx} src={img} className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${idx === current ? 'opacity-100' : 'opacity-0'}`} />
       ))}
       <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-2">
-        {images.map((_, idx) => (
+        {safeImages.map((_: any, idx: number) => (
           <div key={idx} className={`h-1 rounded-full transition-all ${idx === current ? 'w-8 bg-blue-600' : 'w-2 bg-white/50'}`} />
         ))}
       </div>
@@ -299,7 +304,8 @@ function ProductDisplay({ product, onClick, onAdd }: any) {
   return (
     <div className="group">
        <div className="relative aspect-[4/5] bg-slate-100 rounded-[2.5rem] overflow-hidden mb-6 shadow-sm cursor-pointer" onClick={onClick}>
-          <ImageSlider images={product.images && product.images.length > 0 ? product.images : [product.images]} />
+          {/* Safety Check: Mengambil array images atau fallback ke image_url tunggal */}
+          <ImageSlider images={Array.isArray(product.images) && product.images.length > 0 ? product.images : [product.image_url]} />
           <button onClick={(e) => { e.stopPropagation(); onAdd(); }} className="absolute bottom-6 right-6 p-4 bg-slate-900 text-white rounded-2xl opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0 transition-all duration-300 shadow-xl z-10">
              <Plus />
           </button>
