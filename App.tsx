@@ -14,6 +14,14 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
   const [selectedVariant, setSelectedVariant] = useState<string>('');
+  
+  // State untuk Form Checkout
+  const [customerInfo, setCustomerInfo] = useState({
+    name: '',
+    address: '',
+    phone: ''
+  });
+  const [selectedPaymentId, setSelectedPaymentId] = useState<string>('');
 
   // --- IMPLEMENTASI TAWK.TO ---
   useEffect(() => {
@@ -66,6 +74,38 @@ export default function App() {
     setSelectedVariant(product.variants?.[0]?.name || '');
     setView('detail');
     window.scrollTo(0,0);
+  };
+
+  // --- FITUR WHATSAPP CHECKOUT ---
+  const handleConfirmPayment = () => {
+    if (!customerInfo.name || !customerInfo.address || !customerInfo.phone) {
+      return alert("Mohon lengkapi data pengiriman Anda!");
+    }
+    if (!selectedPaymentId) {
+      return alert("Pilih metode pembayaran terlebih dahulu!");
+    }
+
+    const selectedMethod = paymentMethods.find(m => m.id === selectedPaymentId);
+    
+    // Format Pesan WA
+    const productDetails = cart.map((item, index) => 
+      `${index + 1}. ${item.title} [${item.selectedVariant || 'No Variant'}] - Rp ${item.price.toLocaleString()}`
+    ).join('\n');
+
+    const message = `*PESANAN BARU - ZYHA ID*%0A` +
+                    `----------------------------------%0A` +
+                    `*Data Pengiriman:*%0A` +
+                    `Nama: ${customerInfo.name}%0A` +
+                    `No. WA: ${customerInfo.phone}%0A` +
+                    `Alamat: ${customerInfo.address}%0A%0A` +
+                    `*Daftar Produk:*%0A${encodeURIComponent(productDetails)}%0A%0A` +
+                    `*Metode Bayar:* ${selectedMethod?.name}%0A` +
+                    `*Total Tagihan:* *Rp ${totalPrice.toLocaleString()}*%0A` +
+                    `----------------------------------%0A` +
+                    `Mohon segera diproses, terima kasih!`;
+
+    const adminPhone = "6281234567890"; // Silakan ganti dengan nomor WA Admin Anda
+    window.open(`https://wa.me/${adminPhone}?text=${message}`, '_blank');
   };
 
   return (
@@ -217,23 +257,47 @@ export default function App() {
             <div className="space-y-6">
               <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
                 <h3 className="font-bold mb-4 flex items-center gap-2"><User size={18}/> Detail Pengiriman</h3>
-                <input type="text" placeholder="Nama Lengkap" className="w-full p-4 bg-slate-50 rounded-xl mb-3 outline-none ring-1 ring-slate-100" />
-                <input type="text" placeholder="Alamat Lengkap" className="w-full p-4 bg-slate-50 rounded-xl mb-3 outline-none ring-1 ring-slate-100" />
-                <input type="text" placeholder="Nomor WhatsApp" className="w-full p-4 bg-slate-50 rounded-xl outline-none ring-1 ring-slate-100" />
+                <input 
+                  type="text" 
+                  placeholder="Nama Lengkap" 
+                  className="w-full p-4 bg-slate-50 rounded-xl mb-3 outline-none ring-1 ring-slate-100 focus:ring-blue-500" 
+                  value={customerInfo.name}
+                  onChange={(e) => setCustomerInfo({...customerInfo, name: e.target.value})}
+                />
+                <input 
+                  type="text" 
+                  placeholder="Alamat Lengkap" 
+                  className="w-full p-4 bg-slate-50 rounded-xl mb-3 outline-none ring-1 ring-slate-100 focus:ring-blue-500" 
+                  value={customerInfo.address}
+                  onChange={(e) => setCustomerInfo({...customerInfo, address: e.target.value})}
+                />
+                <input 
+                  type="text" 
+                  placeholder="Nomor WhatsApp (Aktif)" 
+                  className="w-full p-4 bg-slate-50 rounded-xl outline-none ring-1 ring-slate-100 focus:ring-blue-500" 
+                  value={customerInfo.phone}
+                  onChange={(e) => setCustomerInfo({...customerInfo, phone: e.target.value})}
+                />
               </div>
               <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
                 <h3 className="font-bold mb-4 flex items-center gap-2"><CreditCard size={18}/> Pilih Metode Bayar</h3>
                 <div className="space-y-3">
                   {paymentMethods.map(m => (
-                    <div key={m.id} className="p-4 border rounded-2xl flex justify-between items-center hover:border-blue-500 cursor-pointer">
+                    <div 
+                      key={m.id} 
+                      onClick={() => setSelectedPaymentId(m.id)}
+                      className={`p-4 border rounded-2xl flex justify-between items-center cursor-pointer transition-all ${selectedPaymentId === m.id ? 'border-blue-500 bg-blue-50' : 'hover:border-slate-300'}`}
+                    >
                       <div className="flex items-center gap-3">
-                        {m.type === 'Bank' ? <Landmark/> : <QrCode/>}
+                        {m.type === 'Bank' ? <Landmark className={selectedPaymentId === m.id ? 'text-blue-600' : ''} /> : <QrCode className={selectedPaymentId === m.id ? 'text-blue-600' : ''}/>}
                         <div>
-                          <p className="font-bold text-sm">{m.name}</p>
+                          <p className={`font-bold text-sm ${selectedPaymentId === m.id ? 'text-blue-600' : ''}`}>{m.name}</p>
                           <p className="text-xs text-slate-500">{m.account_number}</p>
                         </div>
                       </div>
-                      <div className="w-5 h-5 rounded-full border-2 border-slate-200"></div>
+                      <div className={`w-5 h-5 rounded-full border-2 transition-all ${selectedPaymentId === m.id ? 'border-blue-600 bg-blue-600' : 'border-slate-200'}`}>
+                        {selectedPaymentId === m.id && <div className="w-full h-full flex items-center justify-center text-white text-[10px]">✓</div>}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -256,7 +320,13 @@ export default function App() {
                   <span className="text-blue-400">Rp {totalPrice.toLocaleString()}</span>
                 </div>
               </div>
-              <button className="w-full bg-blue-600 py-5 rounded-2xl font-black text-lg hover:bg-blue-700 transition-all">BAYAR SEKARANG</button>
+              <button 
+                onClick={handleConfirmPayment}
+                className="w-full bg-blue-600 py-5 rounded-2xl font-black text-lg hover:bg-blue-700 transition-all flex items-center justify-center gap-3"
+              >
+                <MessageCircle size={22} /> KONFIRMASI WHATSAPP
+              </button>
+              <p className="text-[10px] text-slate-400 mt-4 text-center">Klik tombol di atas untuk mengirim detail pesanan ke Admin via WhatsApp.</p>
             </div>
           </div>
         </section>
@@ -273,7 +343,6 @@ export default function App() {
 function ImageSlider({ images }: { images: any }) {
   const [current, setCurrent] = useState(0);
   
-  // LOGIKA PENGAMAN: Memastikan 'images' selalu dikonversi menjadi Array yang valid
   const safeImages = React.useMemo(() => {
     if (Array.isArray(images)) return images.filter(img => typeof img === 'string' && img.trim() !== '');
     if (typeof images === 'string' && images.trim() !== '') return [images];
@@ -318,7 +387,6 @@ function ProductDisplay({ product, onClick, onAdd }: any) {
   return (
     <div className="group">
        <div className="relative aspect-[4/5] bg-slate-100 rounded-[2.5rem] overflow-hidden mb-6 shadow-sm cursor-pointer" onClick={onClick}>
-          {/* Safety Check: Mengambil array images atau fallback ke image_url tunggal */}
           <ImageSlider images={Array.isArray(product.images) && product.images.length > 0 ? product.images : [product.image_url || product.image]} />
           <button onClick={(e) => { e.stopPropagation(); onAdd(); }} className="absolute bottom-6 right-6 p-4 bg-slate-900 text-white rounded-2xl opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0 transition-all duration-300 shadow-xl z-10">
              <Plus />
