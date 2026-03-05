@@ -237,7 +237,7 @@ export default function App() {
   <div className="relative w-full h-[600px] bg-slate-900 rounded-[3rem] overflow-hidden shadow-2xl group">
      {/* Image dibuat opacity-100 agar warna asli muncul sepenuhnya */}
      <img 
-       src={settings?.banner_url || "https://lh3.googleusercontent.com/u/0/d/1CaDTuCbirLNG82DzbObMqE0Fy9dtxkZT"} 
+       src={settings?.banner_url || "https://lh3.googleusercontent.com/u/0/d/1appsmOMuICaAUj7Ai-v7MkJMwTaMqzaT"} 
        className="absolute inset-0 w-full h-full object-cover opacity-100 scale-105 group-hover:scale-100 transition-transform duration-[2s]" 
        alt="Banner" 
      />
