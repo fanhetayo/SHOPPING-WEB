@@ -146,7 +146,6 @@ function ProductSection() {
     if (!productData.title || !productData.price) return alert("Isi data produk!");
     
     setLoading(true);
-    // PERBAIKAN: Memastikan tipe data bersih untuk mencegah Error 400
     const payload = { 
       ...productData,
       price: Number(productData.price),
@@ -318,7 +317,7 @@ function BankSection() {
   };
 
   const handleSave = async () => {
-    if(!data.name || !data.account_number) return alert("Isi data!");
+    if(!data.name && data.type !== 'Midtrans') return alert("Isi nama metode!");
     await supabase.from('payment_methods').insert([data]);
     setData({ name: '', account_number: '', account_holder: '', type: 'Bank', qris_url: '' });
     fetchMethods();
@@ -360,7 +359,7 @@ function BankSection() {
             <button className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 text-red-500 transition-all" onClick={async () => {if(confirm('Hapus?')) { await supabase.from('payment_methods').delete().eq('id',m.id); fetchMethods();}}}><Trash2 size={16}/></button>
             <div className="flex items-center gap-4 mb-4">
                 <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl">{m.type === 'QRIS' ? <QrCode/> : m.type === 'Midtrans' ? <CreditCard/> : <Landmark/>}</div>
-                <div><p className="text-xs font-bold text-slate-400 uppercase tracking-tighter">{m.type}</p><h4 className="font-black text-xl italic">{m.name}</h4></div>
+                <div><p className="text-xs font-bold text-slate-400 uppercase tracking-tighter">{m.type}</p><h4 className="font-black text-xl italic">{m.name || (m.type === 'Midtrans' ? 'Midtrans' : '')}</h4></div>
             </div>
             {m.qris_url ? <img src={m.qris_url} className="w-full h-32 object-contain bg-slate-50 rounded-xl p-2" /> : <p className="font-mono text-lg font-bold text-slate-900">{m.account_number}</p>}
           </div>
@@ -402,7 +401,9 @@ function OrderSection() {
                 <tr key={o.id} className="border-b hover:bg-slate-50">
                   <td className="p-6 text-[10px] text-slate-400">#{o.id.slice(0,8)}<br/>{new Date(o.created_at).toLocaleDateString()}</td>
                   <td className="p-6 font-bold">{o.customer_name}</td>
-                  <td className="p-6 text-sm">{o.items_summary}</td>
+                  <td className="p-6 text-sm">
+                    {Array.isArray(o.items) ? o.items.map((it:any) => `${it.title} (${it.selectedVariant})`).join(', ') : o.items_summary}
+                  </td>
                   <td className="p-6 font-black text-blue-600">Rp {o.total_price?.toLocaleString()}</td>
                   <td className="p-6">
                     <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${o.status === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-yellow-100 text-yellow-700'}`}>
@@ -467,8 +468,7 @@ function SettingsSection() {
 
   useEffect(() => {
     const fetchSettings = async () => {
-        // PERBAIKAN: Menggunakan filter ID atau limit untuk mencegah error jika tabel kosong
-        const { data, error } = await supabase.from('settings').select('*').limit(1);
+        const { data } = await supabase.from('settings').select('*').limit(1);
         if(data && data.length > 0) {
             setStoreName(data[0].store_name);
             setMidtransClientKey(data[0].midtrans_client_key || '');
@@ -485,7 +485,6 @@ function SettingsSection() {
         midtrans_server_key: midtransServerKey 
     };
     
-    // PERBAIKAN: Menggunakan upsert berdasarkan ID 1 agar tidak duplikat
     const { error } = await supabase.from('settings').upsert([{ id: 1, ...payload }]);
     if (error) alert("Error: " + error.message);
     else alert("Pengaturan Berhasil Disimpan & Sinkron Realtime!");
