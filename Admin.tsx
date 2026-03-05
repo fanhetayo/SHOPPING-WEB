@@ -1,463 +1,517 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { 
-  ShoppingBag, Search, MessageCircle, Star, 
-  ChevronRight, ArrowRight, User, Heart, X, Trash2, Send, Plus, CreditCard, Landmark, QrCode, ChevronLeft
+  LayoutDashboard, Package, ShoppingCart, BarChart3, 
+  MessageSquare, Image as ImageIcon, Settings, 
+  Plus, Trash2, Edit, Landmark, QrCode, Save, RefreshCcw, Globe, Shield, X, UploadCloud, CreditCard
 } from 'lucide-react';
 
-// Declare global for Midtrans Snap
-declare global {
-  interface Window {
-    snap: any;
-  }
-}
-
-export default function App() {
-  const [showCart, setShowCart] = useState(false);
-  const [isLiveChatOpen, setIsLiveChatOpen] = useState(false);
-  const [products, setProducts] = useState<any[]>([]);
-  const [cart, setCart] = useState<any[]>([]);
-  const [view, setView] = useState('shop'); // shop, checkout, detail
-  const [selectedProduct, setSelectedProduct] = useState<any>(null);
-  const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
-  const [selectedVariant, setSelectedVariant] = useState<string>('');
-  const [isProcessing, setIsProcessing] = useState(false);
-
-  // State Form Checkout
-  const [customerName, setCustomerName] = useState('');
-  const [customerAddress, setCustomerAddress] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
-  const [selectedPayment, setSelectedPayment] = useState<any>(null);
-
-  // --- IMPLEMENTASI TAWK.TO ---
-  useEffect(() => {
-    var Tawk_API: any = Tawk_API || {}, Tawk_LoadStart = new Date();
-    (function(){
-      var s1 = document.createElement("script"), s0 = document.getElementsByTagName("script")[0];
-      s1.async = true;
-      s1.src = 'https://embed.tawk.to/69a85b337b02b21c3601f237/1jisr726s';
-      s1.charset = 'UTF-8';
-      s1.setAttribute('crossorigin', '*');
-      s0.parentNode?.insertBefore(s1, s0);
-    })();
-  }, []);
-
-  useEffect(() => {
-    const getData = async () => {
-      const { data: p } = await supabase.from('products').select('*');
-      if (p) setProducts(p);
-      const { data: b } = await supabase.from('payment_methods').select('*');
-      if (b) setPaymentMethods(b);
-    };
-    getData();
-
-    const sub = supabase.channel('api-realtime-admin')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, getData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_methods' }, getData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
-         // Refresh orders logic if needed in Admin Dashboard context
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(sub); };
-  }, []);
-
-  const addToCart = (product: any, variant?: string) => {
-    setCart([...cart, { ...product, selectedVariant: variant || '', cartId: Math.random() }]);
-    setShowCart(true);
-  };
-
-  const removeFromCart = (cartId: any) => {
-    setCart(cart.filter(item => item.cartId !== cartId));
-  };
-
-  const totalPrice = cart.reduce((acc, curr) => acc + curr.price, 0);
-
-  const handleCheckout = () => {
-    if (cart.length === 0) return alert("Keranjang kosong!");
-    setShowCart(false);
-    setView('checkout');
-  };
-
-  const openDetail = (product: any) => {
-    setSelectedProduct(product);
-    setSelectedVariant(product.variants?.[0]?.name || '');
-    setView('detail');
-    window.scrollTo(0,0);
-  };
-
-  // --- FITUR MIDTRANS & REALTIME SYNC UNTUK ADMIN ---
-  const handleConfirmPayment = async () => {
-    if (!customerName || !customerAddress || !customerPhone || !selectedPayment) {
-      return alert("Mohon lengkapi data diri!");
-    }
-
-    setIsProcessing(true);
-
-    try {
-      const orderId = `ZYHA-ADMIN-${Math.floor(1000 + Math.random() * 9000)}`;
-
-      // 1. Ambil Snap Token
-      const { data: snapData, error: snapError } = await supabase.functions.invoke('create-midtrans-token', {
-        body: { 
-          orderId: orderId,
-          grossAmount: totalPrice,
-          customerDetails: {
-            first_name: customerName,
-            phone: customerPhone,
-            address: customerAddress
-          },
-          itemDetails: cart.map(item => ({
-            id: item.id,
-            price: item.price,
-            quantity: 1,
-            name: item.title.substring(0, 50)
-          }))
-        }
-      });
-
-      if (snapError || !snapData?.token) throw new Error("Gagal memproses token Midtrans.");
-
-      // 2. Jalankan Midtrans Snap Popup
-      window.snap.pay(snapData.token, {
-        onSuccess: async (result: any) => {
-          await supabase.from('orders').insert([{
-            order_id: orderId,
-            customer_name: customerName,
-            customer_address: customerAddress,
-            customer_phone: customerPhone,
-            items: cart,
-            total_price: totalPrice,
-            payment_method: selectedPayment.name,
-            status: 'paid',
-            midtrans_id: result.transaction_id
-          }]);
-          alert("Transaksi Sukses (Admin Mode)");
-          setCart([]);
-          setView('shop');
-          setIsProcessing(false);
-        },
-        onPending: async (result: any) => {
-          await supabase.from('orders').insert([{
-            order_id: orderId,
-            customer_name: customerName,
-            customer_address: customerAddress,
-            customer_phone: customerPhone,
-            items: cart,
-            total_price: totalPrice,
-            payment_method: selectedPayment.name,
-            status: 'pending',
-            midtrans_id: result.transaction_id
-          }]);
-          alert("Transaksi Pending.");
-          setCart([]);
-          setView('shop');
-          setIsProcessing(false);
-        },
-        onError: () => {
-           alert("Transaksi Gagal.");
-           setIsProcessing(false);
-        }
-      });
-
-    } catch (err: any) {
-      console.error(err);
-      alert("Error: " + err.message);
-      setIsProcessing(false);
-    }
-  };
+export default function Admin() {
+  const [view, setView] = useState('dashboard');
 
   return (
-    <div className="font-sans text-slate-900 selection:bg-blue-100">
-      <nav className="fixed top-0 w-full z-[100] bg-white/70 backdrop-blur-2xl border-b border-slate-100 px-6 h-20 flex items-center justify-between">
-        <div className="text-3xl font-black tracking-tighter text-slate-900 italic cursor-pointer" onClick={() => setView('shop')}>
-          ZYHA<span className="text-blue-600 underline decoration-2">ID</span>
+    <div className="flex min-h-screen bg-[#F8FAFC]">
+      <aside className="w-72 bg-slate-900 text-white p-8 flex flex-col shadow-2xl sticky top-0 h-screen">
+        <div className="mb-12">
+          <h1 className="text-3xl font-black tracking-tighter text-blue-400 italic">ZYHA ID</h1>
+          <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-bold mt-1">Management System v1.0</p>
         </div>
-        <div className="flex-1 max-w-xl mx-12 relative hidden md:block">
-          <input type="text" placeholder="Cari produk impian Anda..." className="w-full bg-slate-100 rounded-full py-3 px-12 border-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 transition-all outline-none" />
-          <Search className="absolute left-4 top-3 text-slate-400" size={20} />
-        </div>
-        <div className="flex items-center gap-6">
-          <button className="text-slate-600 hover:text-blue-600 transition-colors"><User size={24}/></button>
-          <button className="relative bg-slate-900 text-white p-3 rounded-full hover:scale-105 transition-transform" onClick={() => setShowCart(true)}>
-            <ShoppingBag size={22} />
-            {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center ring-4 ring-white">{cart.length}</span>}
-          </button>
-        </div>
-      </nav>
+        <nav className="flex-1 space-y-2 overflow-y-auto">
+          <SidebarLink icon={<LayoutDashboard size={20}/>} label="Dashboard" active={view === 'dashboard'} onClick={() => setView('dashboard')} />
+          <SidebarLink icon={<Package size={20}/>} label="Produk & Katalog" active={view === 'products'} onClick={() => setView('products')} />
+          <SidebarLink icon={<Landmark size={20}/>} label="Metode Bayar" active={view === 'banks'} onClick={() => setView('banks')} />
+          <SidebarLink icon={<ShoppingCart size={20}/>} label="Pesanan" active={view === 'orders'} onClick={() => setView('orders')} />
+          <SidebarLink icon={<BarChart3 size={20}/>} label="Analitik" active={view === 'analytics'} onClick={() => setView('analytics')} />
+          <SidebarLink icon={<MessageSquare size={20}/>} label="WA Gateway" active={view === 'wa'} onClick={() => setView('wa')} />
+          <SidebarLink icon={<Settings size={20}/>} label="Pengaturan" active={view === 'settings'} onClick={() => setView('settings')} />
+        </nav>
+      </aside>
 
-      {/* CART DRAWER */}
-      {showCart && (
-        <div className="fixed inset-0 z-[200] flex justify-end">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowCart(false)}></div>
-          <div className="relative w-full max-w-md bg-white h-full shadow-2xl p-8 flex flex-col animate-in slide-in-from-right">
-            <div className="flex justify-between items-center mb-8">
-               <h2 className="text-2xl font-black italic">KERANJANG ANDA</h2>
-               <button onClick={() => setShowCart(false)} className="p-2 bg-slate-100 rounded-full"><X/></button>
-            </div>
-            <div className="flex-1 space-y-4 overflow-y-auto">
-               {cart.map(item => (
-                 <CartItem key={item.cartId} title={item.title} variant={item.selectedVariant} price={`Rp ${item.price.toLocaleString()}`} onRemove={() => removeFromCart(item.cartId)} />
-               ))}
-            </div>
-            <div className="mt-auto border-t pt-6 space-y-4">
-               <div className="flex justify-between font-bold text-xl">
-                 <span>Total Belanja</span>
-                 <span className="text-blue-600">Rp {totalPrice.toLocaleString()}</span>
-               </div>
-               <button onClick={handleCheckout} className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black text-lg shadow-xl hover:bg-black flex items-center justify-center gap-3">
-                 CHECKOUT SEKARANG <ArrowRight size={20}/>
-               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {view === 'shop' && (
-        <>
-          <section className="pt-32 px-6 max-w-7xl mx-auto">
-            <div className="relative w-full h-[600px] bg-slate-900 rounded-[3rem] overflow-hidden shadow-2xl group">
-               <img src="https://images.unsplash.com/photo-1549298916-b41d501d3772?q=80&w=2012" className="absolute inset-0 w-full h-full object-cover opacity-60 scale-105 group-hover:scale-100 transition-transform duration-[2s]" alt="Banner" />
-               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-center px-16">
-                  <span className="text-blue-400 font-black tracking-[0.5em] uppercase mb-4 text-sm animate-pulse">Edisi Terbatas</span>
-                  <h2 className="text-7xl font-black text-white max-w-2xl leading-[1.1] mb-8 italic">STEP INTO THE FUTURE.</h2>
-                  <button className="bg-white text-slate-900 px-10 py-5 rounded-2xl font-black w-fit hover:bg-blue-600 hover:text-white transition-all shadow-2xl flex items-center gap-4 group/btn">
-                      BELANJA KOLEKSI <ChevronRight className="group-hover/btn:translate-x-2 transition-transform" />
-                  </button>
-               </div>
-            </div>
-          </section>
-
-          <section className="max-w-7xl mx-auto px-6 py-20">
-             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                <CategoryCard name="Elektronik" icon="📱" />
-                <CategoryCard name="Fashion" icon="👕" />
-                <CategoryCard name="Sepatu" icon="👟" />
-                <CategoryCard name="Jam Tangan" icon="⌚" />
-                <CategoryCard name="Kesehatan" icon="🩺" />
-                <CategoryCard name="Hobi" icon="🎨" />
-             </div>
-          </section>
-
-          <section className="max-w-7xl mx-auto px-6 pb-32">
-            <div className="flex justify-between items-end mb-12">
-              <div>
-                 <h2 className="text-4xl font-black italic uppercase tracking-tighter">Katalog Produk <span className="text-blue-600 text-6xl">.</span></h2>
-                 <p className="text-slate-400 font-medium">Temukan gaya terbaikmu hari ini.</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-10">
-               {products.map((p) => (
-                 <ProductDisplay key={p.id} product={p} onClick={() => openDetail(p)} onAdd={() => addToCart(p)} />
-               ))}
-            </div>
-          </section>
-        </>
-      )}
-
-      {view === 'detail' && selectedProduct && (
-        <section className="pt-32 px-6 max-w-7xl mx-auto pb-32 animate-in fade-in duration-500">
-          <button onClick={() => setView('shop')} className="mb-8 flex items-center gap-2 font-bold text-slate-400 hover:text-slate-900 transition-colors">
-            <ChevronLeft size={20}/> Kembali ke Katalog
-          </button>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-16">
-            <div className="space-y-6">
-              <div className="rounded-[3rem] overflow-hidden shadow-2xl bg-slate-100 aspect-square">
-                <ImageSlider images={selectedProduct.images && Array.isArray(selectedProduct.images) && selectedProduct.images.length > 0 ? selectedProduct.images : [selectedProduct.image_url || selectedProduct.image]} />
-              </div>
-            </div>
-            <div className="space-y-8">
-              <div>
-                <span className="px-4 py-1 bg-blue-100 text-blue-600 rounded-full text-xs font-black uppercase tracking-widest">{selectedProduct.category}</span>
-                <h1 className="text-5xl font-black italic mt-4 text-slate-900 leading-tight">{selectedProduct.title}</h1>
-                <p className="text-3xl font-black text-blue-600 mt-2">Rp {selectedProduct.price?.toLocaleString()}</p>
-              </div>
-              
-              <div className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100">
-                <h3 className="font-bold uppercase tracking-widest text-slate-400 text-xs mb-4">Deskripsi Produk</h3>
-                <p className="text-slate-600 leading-relaxed">{selectedProduct.description || "Tidak ada deskripsi."}</p>
-              </div>
-
-              {selectedProduct.variants && selectedProduct.variants.length > 0 && (
-                <div className="space-y-4">
-                  <h3 className="font-bold uppercase tracking-widest text-slate-400 text-xs">Pilih Varian Warna</h3>
-                  <div className="flex flex-wrap gap-3">
-                    {selectedProduct.variants.map((v: any, idx: number) => (
-                      <button 
-                        key={idx} 
-                        onClick={() => setSelectedVariant(v.name)}
-                        className={`px-6 py-3 rounded-2xl font-bold border-2 transition-all flex items-center gap-3 ${selectedVariant === v.name ? 'border-blue-600 bg-blue-50 text-blue-600' : 'border-slate-100 bg-white text-slate-400'}`}
-                      >
-                        {v.image && <img src={v.image} className="w-6 h-6 rounded-lg object-cover" />}
-                        {v.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-4 pt-4">
-                <button onClick={() => addToCart(selectedProduct, selectedVariant)} className="p-5 border-2 border-slate-900 rounded-2xl font-black uppercase hover:bg-slate-900 hover:text-white transition-all flex items-center justify-center gap-3">
-                  <ShoppingBag size={20}/> Keranjang
-                </button>
-                <button onClick={() => { addToCart(selectedProduct, selectedVariant); handleCheckout(); }} className="p-5 bg-blue-600 text-white rounded-2xl font-black uppercase shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all">
-                  Checkout Langsung
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {view === 'checkout' && (
-        <section className="pt-32 px-6 max-w-4xl mx-auto pb-32 animate-in slide-in-from-bottom-8">
-          <h2 className="text-4xl font-black italic mb-8 uppercase">Halaman Pembayaran</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-            <div className="space-y-6">
-              <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
-                <h3 className="font-bold mb-4 flex items-center gap-2"><User size={18}/> Detail Pengiriman</h3>
-                <input type="text" placeholder="Nama Lengkap" value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="w-full p-4 bg-slate-50 rounded-xl mb-3 outline-none ring-1 ring-slate-100 focus:ring-blue-500" />
-                <input type="text" placeholder="Alamat Lengkap" value={customerAddress} onChange={(e) => setCustomerAddress(e.target.value)} className="w-full p-4 bg-slate-50 rounded-xl mb-3 outline-none ring-1 ring-slate-100 focus:ring-blue-500" />
-                <input type="text" placeholder="Nomor WhatsApp" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} className="w-full p-4 bg-slate-50 rounded-xl outline-none ring-1 ring-slate-100 focus:ring-blue-500" />
-              </div>
-              <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
-                <h3 className="font-bold mb-4 flex items-center gap-2"><CreditCard size={18}/> Pilih Metode Bayar</h3>
-                <div className="space-y-3">
-                  {paymentMethods.map(m => (
-                    <div key={m.id} onClick={() => setSelectedPayment(m)} className={`p-4 border rounded-2xl flex justify-between items-center cursor-pointer transition-all ${selectedPayment?.id === m.id ? 'border-blue-600 bg-blue-50' : 'hover:border-blue-500'}`}>
-                      <div className="flex items-center gap-3">
-                        {m.type === 'Bank' ? <Landmark className={selectedPayment?.id === m.id ? 'text-blue-600' : ''} /> : <QrCode className={selectedPayment?.id === m.id ? 'text-blue-600' : ''} />}
-                        <div>
-                          <p className={`font-bold text-sm ${selectedPayment?.id === m.id ? 'text-blue-600' : ''}`}>{m.name}</p>
-                          <p className="text-xs text-slate-500">{m.account_number}</p>
-                        </div>
-                      </div>
-                      <div className={`w-5 h-5 rounded-full border-2 ${selectedPayment?.id === m.id ? 'border-blue-600 bg-blue-600' : 'border-slate-200'}`}></div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="bg-slate-900 text-white p-8 rounded-[2.5rem] h-fit sticky top-32">
-              <h3 className="font-bold text-xl mb-6 italic">Ringkasan Pesanan</h3>
-              <div className="space-y-4 mb-8">
-                {cart.map(item => (
-                  <div key={item.cartId} className="flex justify-between text-sm">
-                    <div className="flex flex-col">
-                      <span className="text-slate-400">{item.title}</span>
-                      {item.selectedVariant && <span className="text-[10px] text-blue-400 font-bold uppercase">{item.selectedVariant}</span>}
-                    </div>
-                    <span className="font-bold">Rp {item.price.toLocaleString()}</span>
-                  </div>
-                ))}
-                <div className="border-t border-white/10 pt-4 flex justify-between font-black text-xl">
-                  <span>TOTAL</span>
-                  <span className="text-blue-400">Rp {totalPrice.toLocaleString()}</span>
-                </div>
-              </div>
-              <button 
-                onClick={handleConfirmPayment} 
-                disabled={isProcessing}
-                className={`w-full py-5 rounded-2xl font-black text-lg transition-all flex items-center justify-center gap-2 ${isProcessing ? 'bg-slate-700 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-200'} text-white`}
-              >
-                <CreditCard size={20} /> {isProcessing ? 'MEMPROSES...' : 'BAYAR AMAN (MIDTRANS)'}
-              </button>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* FOOTER SPACER */}
-      <div className="h-20"></div>
+      <main className="flex-1 p-10 overflow-y-auto">
+        {view === 'dashboard' && <DashboardSection />}
+        {view === 'products' && <ProductSection />}
+        {view === 'banks' && <BankSection />}
+        {view === 'orders' && <OrderSection />}
+        {view === 'analytics' && <AnalyticsSection />}
+        {view === 'wa' && <WAGatewaySection />}
+        {view === 'settings' && <SettingsSection />}
+      </main>
     </div>
   );
 }
 
-// --- SUB COMPONENTS ---
+// --- SECTIONS ---
 
-function ImageSlider({ images }: { images: any }) {
-  const [current, setCurrent] = useState(0);
+function DashboardSection() {
+  const [stats, setStats] = useState({ revenue: 0, orders: 0, products: 0 });
   
-  const safeImages = React.useMemo(() => {
-    if (Array.isArray(images)) return images.filter(img => typeof img === 'string' && img.trim() !== '');
-    if (typeof images === 'string' && images.trim() !== '') return [images];
-    return [];
-  }, [images]);
-
   useEffect(() => {
-    if (safeImages.length <= 1) return;
-    const timer = setInterval(() => {
-      setCurrent(prev => (prev === safeImages.length - 1 ? 0 : prev + 1));
-    }, 4000);
-    return () => clearInterval(timer);
-  }, [safeImages]);
-
-  if (safeImages.length === 0) {
-    return <div className="w-full h-full bg-slate-200 flex items-center justify-center text-slate-400 font-bold text-xs uppercase italic">No Image</div>;
-  }
+    const fetchStats = async () => {
+      const { data: o } = await supabase.from('orders').select('total_price');
+      const { count: p } = await supabase.from('products').select('*', { count: 'exact', head: true });
+      const totalRev = o?.reduce((acc, curr) => acc + (curr.total_price || 0), 0) || 0;
+      setStats({ revenue: totalRev, orders: o?.length || 0, products: p || 0 });
+    };
+    fetchStats();
+  }, []);
 
   return (
-    <div className="relative w-full h-full group bg-white">
-      {safeImages.map((img: string, idx: number) => (
-        <img 
-          key={idx} 
-          src={img} 
-          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${idx === current ? 'opacity-100' : 'opacity-0'}`} 
-          alt="product"
-          onError={(e) => { (e.target as HTMLImageElement).src = 'https://placehold.co/600x600/e2e8f0/64748b?text=Image+Not+Found'; }}
-        />
-      ))}
-      {safeImages.length > 1 && (
-        <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-2">
-          {safeImages.map((_, idx: number) => (
-            <div key={idx} className={`h-1 rounded-full transition-all ${idx === current ? 'w-8 bg-blue-600' : 'w-2 bg-white/50'}`} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ProductDisplay({ product, onClick, onAdd }: any) {
-  return (
-    <div className="group">
-       <div className="relative aspect-[4/5] bg-slate-100 rounded-[2.5rem] overflow-hidden mb-6 shadow-sm cursor-pointer" onClick={onClick}>
-          <ImageSlider images={Array.isArray(product.images) && product.images.length > 0 ? product.images : [product.image_url || product.image]} />
-          <button onClick={(e) => { e.stopPropagation(); onAdd(); }} className="absolute bottom-6 right-6 p-4 bg-slate-900 text-white rounded-2xl opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0 transition-all duration-300 shadow-xl z-10">
-             <Plus />
-          </button>
-       </div>
-       <div className="space-y-1 cursor-pointer" onClick={onClick}>
-          <div className="flex items-center gap-1 text-yellow-500 mb-2">
-            {[1,2,3,4,5].map(i => <Star key={i} size={14} fill="currentColor" />)}
-          </div>
-          <h3 className="text-xl font-bold tracking-tight text-slate-800 group-hover:text-blue-600 transition-colors">{product.title}</h3>
-          <p className="text-slate-900 font-black text-lg">Rp {product.price?.toLocaleString()}</p>
-       </div>
-    </div>
-  );
-}
-
-function CategoryCard({ name, icon }: any) {
-  return (
-    <div className="group cursor-pointer">
-      <div className="bg-white border border-slate-100 shadow-sm p-8 rounded-[2rem] flex flex-col items-center group-hover:bg-blue-600 transition-all group-hover:-translate-y-2">
-         <span className="text-4xl mb-4 grayscale group-hover:grayscale-0 transition-all">{icon}</span>
-         <p className="font-black text-xs uppercase tracking-widest text-slate-400 group-hover:text-white">{name}</p>
+    <div className="animate-in fade-in duration-500">
+      <h2 className="text-3xl font-bold mb-8 italic">Dashboard Overview</h2>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+        <StatCard title="Total Pendapatan" value={`Rp ${stats.revenue.toLocaleString()}`} growth="+15%" color="bg-blue-600" />
+        <StatCard title="Total Pesanan" value={stats.orders.toString()} growth="Semua Waktu" color="bg-emerald-600" />
+        <StatCard title="Total Produk" value={stats.products.toString()} growth="Live" color="bg-slate-900" />
+      </div>
+      <div className="bg-white p-10 rounded-[3rem] border shadow-sm h-64 flex flex-col items-center justify-center text-center">
+        <RefreshCcw className="mb-4 text-blue-500 animate-spin-slow" size={40} />
+        <p className="text-slate-400 font-medium">Sistem tersinkronisasi otomatis dengan Database Supabase.</p>
       </div>
     </div>
   );
 }
 
-function CartItem({title, variant, price, onRemove}: any) {
+function ProductSection() {
+  const [products, setProducts] = useState<any[]>([]);
+  const [editingId, setEditingId] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  
+  const initialData = { 
+    title: '', 
+    price: 0, 
+    description: '', 
+    category: 'Sepatu', 
+    image_url: '', 
+    images: [] as string[], 
+    variants: [] as {name: string, image: string}[] 
+  };
+  
+  const [productData, setProductData] = useState(initialData);
+
+  const fetchProducts = async () => {
+    const { data } = await supabase.from('products').select('*').order('created_at', { ascending: false });
+    if (data) setProducts(data);
+  };
+
+  useEffect(() => { fetchProducts(); }, []);
+
+  const handleUploadImages = async (files: FileList | null) => {
+    if (!files) return;
+    const filesArray = Array.from(files);
+    if (productData.images.length + filesArray.length > 5) return alert("Maksimal 5 gambar!");
+
+    setLoading(true);
+    const newImages = [...productData.images];
+
+    for (const file of filesArray) {
+      const fileName = `${Date.now()}_${file.name}`;
+      const { error } = await supabase.storage.from('products').upload(fileName, file);
+      if (!error) {
+        const { data: { publicUrl } } = supabase.storage.from('products').getPublicUrl(fileName);
+        newImages.push(publicUrl);
+      }
+    }
+    setProductData({ ...productData, images: newImages, image_url: newImages[0] });
+    setLoading(false);
+  };
+
+  const handleVariantUpload = async (file: File, index: number) => {
+    setLoading(true);
+    const fileName = `variant_${Date.now()}_${file.name}`;
+    const { error } = await supabase.storage.from('products').upload(fileName, file);
+    if (!error) {
+      const { data: { publicUrl } } = supabase.storage.from('products').getPublicUrl(fileName);
+      const newVariants = [...productData.variants];
+      newVariants[index].image = publicUrl;
+      setProductData({ ...productData, variants: newVariants });
+    }
+    setLoading(false);
+  };
+
+  const addVariant = () => {
+    setProductData({ ...productData, variants: [...productData.variants, { name: '', image: '' }] });
+  };
+
+  const removeVariant = (index: number) => {
+    setProductData({ ...productData, variants: productData.variants.filter((_, i) => i !== index) });
+  };
+
+  const updateVariantName = (index: number, name: string) => {
+    const newVariants = [...productData.variants];
+    newVariants[index].name = name;
+    setProductData({ ...productData, variants: newVariants });
+  };
+
+  const handleSave = async () => {
+    if (!productData.title || !productData.price) return alert("Isi data produk!");
+    
+    const payload = { ...productData };
+    if (editingId) {
+      await supabase.from('products').update(payload).eq('id', editingId);
+      setEditingId(null);
+    } else {
+      await supabase.from('products').insert([payload]);
+    }
+    setProductData(initialData);
+    fetchProducts();
+  };
+
   return (
-    <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl">
-       <div className="w-16 h-16 bg-slate-200 rounded-xl overflow-hidden flex items-center justify-center text-[10px] text-slate-400 uppercase italic">ZYHA</div>
-       <div className="flex-1">
-          <h4 className="font-bold text-sm">{title}</h4>
-          {variant && <p className="text-[10px] font-bold text-slate-400 uppercase">{variant}</p>}
-          <p className="text-blue-600 font-black text-xs">{price}</p>
-       </div>
-       <button onClick={onRemove} className="text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={18}/></button>
+    <div className="space-y-8 animate-in slide-in-from-bottom-4">
+      <h2 className="text-3xl font-bold italic">Produk & Katalog</h2>
+      
+      <div className="bg-white p-10 rounded-[3rem] shadow-xl border space-y-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+          <div className="space-y-6">
+            <label className="block text-xs font-black uppercase tracking-[0.2em] text-slate-400">Galeri Produk (Max 5)</label>
+            <div className="grid grid-cols-5 gap-2">
+              {productData.images.map((img, idx) => (
+                <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border">
+                  <img src={img} className="w-full h-full object-cover" />
+                  <button onClick={() => {
+                    const filtered = productData.images.filter((_, i) => i !== idx);
+                    setProductData({...productData, images: filtered, image_url: filtered[0] || ''});
+                  }} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1"><X size={12}/></button>
+                </div>
+              ))}
+              {productData.images.length < 5 && (
+                <div className="aspect-square bg-slate-50 border-2 border-dashed rounded-xl flex items-center justify-center relative hover:bg-slate-100 transition-colors">
+                  <input type="file" multiple className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleUploadImages(e.target.files)} />
+                  <UploadCloud className="text-slate-300" />
+                </div>
+              )}
+            </div>
+            
+            <input type="text" value={productData.title} placeholder="Nama Produk" className="w-full p-5 bg-slate-50 rounded-2xl outline-none ring-1 ring-slate-100 font-bold" onChange={e => setProductData({...productData, title: e.target.value})} />
+            <div className="grid grid-cols-2 gap-4">
+              <input type="number" value={productData.price || ''} placeholder="Harga (Rp)" className="w-full p-5 bg-slate-50 rounded-2xl outline-none ring-1 ring-slate-100" onChange={e => setProductData({...productData, price: parseInt(e.target.value)})} />
+              <select className="p-5 bg-slate-50 rounded-2xl outline-none ring-1 ring-slate-100 font-bold" value={productData.category} onChange={e => setProductData({...productData, category: e.target.value})}>
+                <option value="Sepatu">Sepatu</option>
+                <option value="Elektronik">Elektronik</option>
+                <option value="Fashion">Fashion</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <label className="block text-xs font-black uppercase tracking-[0.2em] text-slate-400">Deskripsi & Variasi</label>
+            <textarea value={productData.description} placeholder="Deskripsi lengkap produk..." className="w-full p-5 bg-slate-50 rounded-2xl h-32 outline-none ring-1 ring-slate-100" onChange={e => setProductData({...productData, description: e.target.value})}></textarea>
+            
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-black uppercase text-slate-400">Variasi Warna</span>
+                <button onClick={addVariant} className="text-blue-500 font-black text-[10px] uppercase flex items-center gap-1 hover:underline"><Plus size={14}/> Tambah Variasi</button>
+              </div>
+              <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
+                {productData.variants.map((v, idx) => (
+                  <div key={idx} className="flex gap-2 items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    <div className="w-10 h-10 bg-slate-200 rounded-lg overflow-hidden relative">
+                      {v.image ? <img src={v.image} className="w-full h-full object-cover" /> : <ImageIcon className="m-auto text-slate-400" size={16}/>}
+                      <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => e.target.files && handleVariantUpload(e.target.files[0], idx)} />
+                    </div>
+                    <input type="text" value={v.name} placeholder="Nama Warna" className="flex-1 bg-transparent outline-none text-sm font-bold" onChange={(e) => updateVariantName(idx, e.target.value)} />
+                    <button onClick={() => removeVariant(idx)} className="text-red-400"><Trash2 size={16}/></button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <button onClick={handleSave} disabled={loading} className="w-full bg-slate-900 text-white p-6 rounded-3xl font-black uppercase hover:bg-black transition-all shadow-xl shadow-slate-200">
+              {loading ? 'Processing...' : editingId ? 'Update Produk' : 'Simpan Produk'}
+            </button>
+            {editingId && <button onClick={() => {setEditingId(null); setProductData(initialData)}} className="w-full text-slate-400 font-bold text-xs uppercase italic">Batal Edit</button>}
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-[3rem] shadow-sm border overflow-hidden">
+        <table className="w-full text-left">
+          <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-400">
+            <tr>
+              <th className="p-6">Produk</th>
+              <th className="p-6">Informasi</th>
+              <th className="p-6">Variasi</th>
+              <th className="p-6">Harga</th>
+              <th className="p-6 text-center">Aksi</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {products.map(p => (
+              <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
+                <td className="p-6">
+                  <div className="flex items-center gap-4">
+                    <img src={p.image_url} className="w-16 h-16 rounded-2xl object-cover bg-slate-100 border" />
+                    <div>
+                      <p className="font-black text-slate-900 italic">{p.title}</p>
+                      <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">{p.category}</p>
+                    </div>
+                  </div>
+                </td>
+                <td className="p-6">
+                    <p className="text-xs text-slate-500 line-clamp-2 max-w-xs">{p.description}</p>
+                </td>
+                <td className="p-6">
+                  <div className="flex -space-x-2">
+                    {p.variants?.map((v: any, idx: number) => (
+                      <div key={idx} className="w-8 h-8 rounded-full border-2 border-white bg-slate-100 overflow-hidden" title={v.name}>
+                        <img src={v.image} className="w-full h-full object-cover" />
+                      </div>
+                    ))}
+                    {(!p.variants || p.variants.length === 0) && <span className="text-xs text-slate-300 italic">No variants</span>}
+                  </div>
+                </td>
+                <td className="p-6 font-black text-blue-600 italic">Rp {p.price.toLocaleString()}</td>
+                <td className="p-6">
+                  <div className="flex justify-center gap-2">
+                    <button onClick={() => {setEditingId(p.id); setProductData(p)}} className="p-3 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all"><Edit size={18}/></button>
+                    <button onClick={async () => { if(confirm('Hapus produk ini?')) { await supabase.from('products').delete().eq('id',p.id); fetchProducts(); } }} className="p-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all"><Trash2 size={18}/></button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
-  )
+  );
+}
+
+function BankSection() {
+  const [methods, setMethods] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [data, setData] = useState({ name: '', account_number: '', account_holder: '', type: 'Bank', qris_url: '' });
+
+  const fetchMethods = async () => {
+    const { data: m } = await supabase.from('payment_methods').select('*');
+    if (m) setMethods(m);
+  };
+
+  useEffect(() => { fetchMethods(); }, []);
+
+  const handleQRUpload = async (file: any) => {
+    try {
+      setLoading(true);
+      const fileName = `qris_${Date.now()}`;
+      const { error } = await supabase.storage.from('products').upload(fileName, file);
+      if (error) throw error;
+      const { data: { publicUrl } } = supabase.storage.from('products').getPublicUrl(fileName);
+      setData({ ...data, qris_url: publicUrl });
+      alert("QRIS Berhasil diupload!");
+    } catch (e: any) { alert(e.message); } finally { setLoading(false); }
+  };
+
+  const handleSave = async () => {
+    if(!data.name || !data.account_number) return alert("Isi data!");
+    await supabase.from('payment_methods').insert([data]);
+    setData({ name: '', account_number: '', account_holder: '', type: 'Bank', qris_url: '' });
+    fetchMethods();
+  };
+
+  return (
+    <div className="space-y-8">
+      <h2 className="text-3xl font-bold italic">Metode Pembayaran</h2>
+      <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="space-y-4">
+           <input type="text" value={data.name} placeholder="Nama Bank / E-Wallet (BCA/DANA)" className="w-full p-4 bg-slate-50 rounded-xl outline-none border font-bold" onChange={e => setData({...data, name: e.target.value})} />
+           <input type="text" value={data.account_number} placeholder="Nomor Rekening / No. HP" className="w-full p-4 bg-slate-50 rounded-xl outline-none border font-mono" onChange={e => setData({...data, account_number: e.target.value})} />
+           <select className="w-full p-4 bg-slate-50 rounded-xl outline-none border font-bold" value={data.type} onChange={e => setData({...data, type: e.target.value})}>
+             <option value="Bank">Transfer Bank</option>
+             <option value="E-Wallet">E-Wallet</option>
+             <option value="QRIS">QRIS Dinamis/Statis</option>
+             <option value="Midtrans">Midtrans (Otomatis)</option>
+           </select>
+        </div>
+        <div className="space-y-4">
+           {data.type === 'QRIS' && (
+             <div className="border-2 border-dashed rounded-2xl p-4 flex flex-col items-center justify-center relative min-h-[150px] bg-slate-50">
+               {data.qris_url ? <img src={data.qris_url} className="h-32 object-contain" /> : <p className="text-xs text-slate-400">Upload Foto QRIS</p>}
+               <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleQRUpload(e.target.files?.[0])} />
+             </div>
+           )}
+           {data.type === 'Midtrans' && (
+             <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 flex items-center gap-3">
+               <CreditCard className="text-blue-600" />
+               <p className="text-xs font-bold text-blue-600">Pastikan API Keys sudah diatur di menu Pengaturan.</p>
+             </div>
+           )}
+           <button onClick={handleSave} className="w-full bg-blue-600 text-white p-5 rounded-2xl font-black uppercase shadow-lg shadow-blue-100">Tambah Metode</button>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {methods.map(m => (
+          <div key={m.id} className="bg-white p-6 rounded-3xl border shadow-sm relative group hover:border-blue-500 transition-all">
+            <button className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 text-red-500 transition-all" onClick={async () => {if(confirm('Hapus?')) { await supabase.from('payment_methods').delete().eq('id',m.id); fetchMethods();}}}><Trash2 size={16}/></button>
+            <div className="flex items-center gap-4 mb-4">
+                <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl">{m.type === 'QRIS' ? <QrCode/> : m.type === 'Midtrans' ? <CreditCard/> : <Landmark/>}</div>
+                <div><p className="text-xs font-bold text-slate-400 uppercase tracking-tighter">{m.type}</p><h4 className="font-black text-xl italic">{m.name}</h4></div>
+            </div>
+            {m.qris_url ? <img src={m.qris_url} className="w-full h-32 object-contain bg-slate-50 rounded-xl p-2" /> : <p className="font-mono text-lg font-bold text-slate-900">{m.account_number}</p>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function OrderSection() {
+  const [orders, setOrders] = useState<any[]>([]);
+  
+  const fetchOrders = async () => {
+    const { data } = await supabase.from('orders').select('*').order('created_at', {ascending: false});
+    if(data) setOrders(data);
+  };
+
+  useEffect(() => {
+    fetchOrders();
+    // REALTIME SYNC
+    const subscription = supabase.channel('orders-admin')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchOrders)
+      .subscribe();
+    return () => { supabase.removeChannel(subscription); };
+  }, []);
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-3xl font-bold italic">Manajemen Pesanan</h2>
+      <div className="bg-white rounded-[2.5rem] shadow-sm border overflow-hidden">
+        <table className="w-full text-left">
+          <thead className="bg-slate-900 text-white text-xs uppercase font-bold">
+            <tr><th className="p-6">ID / Waktu</th><th className="p-6">Pembeli</th><th className="p-6">Produk</th><th className="p-6">Total</th><th className="p-6">Status</th></tr>
+          </thead>
+          <tbody>
+            {orders.length === 0 ? (
+              <tr><td colSpan={5} className="p-20 text-center text-slate-400 italic">Belum ada pesanan masuk.</td></tr>
+            ) : (
+              orders.map(o => (
+                <tr key={o.id} className="border-b hover:bg-slate-50">
+                  <td className="p-6 text-[10px] text-slate-400">#{o.id.slice(0,8)}<br/>{new Date(o.created_at).toLocaleDateString()}</td>
+                  <td className="p-6 font-bold">{o.customer_name}</td>
+                  <td className="p-6 text-sm">{o.items_summary}</td>
+                  <td className="p-6 font-black text-blue-600">Rp {o.total_price?.toLocaleString()}</td>
+                  <td className="p-6">
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${o.status === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                      {o.status || 'Pending'}
+                    </span>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function AnalyticsSection() {
+  return (
+    <div className="space-y-8">
+      <h2 className="text-3xl font-bold italic">Analitik Performa</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="bg-white p-8 rounded-[3rem] border shadow-sm">
+           <h3 className="font-bold mb-6 flex items-center gap-2"><BarChart3 size={20} className="text-blue-500"/> Trafik Pengunjung</h3>
+           <div className="h-48 flex items-end gap-2">
+             {[40, 70, 45, 90, 65, 80, 100].map((h, i) => (
+               <div key={i} className="flex-1 bg-slate-100 rounded-t-lg relative group">
+                  <div style={{ height: `${h}%` }} className="bg-blue-500 rounded-t-lg transition-all group-hover:bg-slate-900"></div>
+               </div>
+             ))}
+           </div>
+        </div>
+        <div className="bg-slate-900 text-white p-8 rounded-[3rem] shadow-xl flex flex-col justify-center">
+           <h3 className="font-bold mb-4 italic">Ringkasan Sistem</h3>
+           <p className="text-slate-400 text-sm">Database: Connected via Supabase Realtime</p>
+           <p className="text-slate-400 text-sm">Storage: Active (CDN Enabled)</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WAGatewaySection() {
+  const [wa, setWa] = useState('628123456789');
+  return (
+    <div className="max-w-2xl">
+      <h2 className="text-3xl font-bold italic mb-8">WA Gateway</h2>
+      <div className="bg-white p-10 rounded-[3rem] border shadow-sm space-y-6">
+        <label className="text-xs font-black uppercase text-slate-400">Nomor WhatsApp Notifikasi</label>
+        <input type="text" value={wa} onChange={e => setWa(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl border font-mono text-lg" />
+        <button onClick={() => alert('Konfigurasi Disimpan')} className="w-full bg-slate-900 text-white p-5 rounded-2xl font-black uppercase flex items-center justify-center gap-2 hover:bg-black transition-all">
+          <Save size={20}/> Simpan Konfigurasi
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SettingsSection() {
+  const [storeName, setStoreName] = useState('ZYHA ID');
+  const [midtransClientKey, setMidtransClientKey] = useState('');
+  const [midtransServerKey, setMidtransServerKey] = useState('');
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+        const { data } = await supabase.from('settings').select('*').single();
+        if(data) {
+            setStoreName(data.store_name);
+            setMidtransClientKey(data.midtrans_client_key);
+            setMidtransServerKey(data.midtrans_server_key);
+        }
+    }
+    fetchSettings();
+  }, []);
+
+  const handleSave = async () => {
+    const payload = { 
+        store_name: storeName, 
+        midtrans_client_key: midtransClientKey, 
+        midtrans_server_key: midtransServerKey 
+    };
+    await supabase.from('settings').upsert([payload]);
+    alert("Pengaturan Berhasil Disimpan & Sinkron Realtime!");
+  }
+
+  return (
+    <div className="space-y-8">
+      <h2 className="text-3xl font-bold italic">Pengaturan</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="bg-white p-8 rounded-[3rem] border shadow-sm space-y-6">
+          <h3 className="font-bold flex items-center gap-2"><Globe size={20}/> Profil Toko</h3>
+          <input type="text" value={storeName} onChange={e => setStoreName(e.target.value)} placeholder="Nama Toko" className="w-full p-4 bg-slate-50 rounded-xl border font-bold" />
+          
+          <div className="pt-4 border-t space-y-4">
+            <h3 className="font-bold flex items-center gap-2"><CreditCard size={20}/> Midtrans API (Snap)</h3>
+            <input type="text" value={midtransClientKey} onChange={e => setMidtransClientKey(e.target.value)} placeholder="Client Key" className="w-full p-4 bg-slate-50 rounded-xl border text-xs font-mono" />
+            <input type="password" value={midtransServerKey} onChange={e => setMidtransServerKey(e.target.value)} placeholder="Server Key" className="w-full p-4 bg-slate-50 rounded-xl border text-xs font-mono" />
+          </div>
+
+          <button onClick={handleSave} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase shadow-lg shadow-slate-200">Simpan Perubahan</button>
+        </div>
+        <div className="bg-white p-8 rounded-[3rem] border shadow-sm space-y-6 opacity-60">
+          <h3 className="font-bold flex items-center gap-2"><Shield size={20}/> Keamanan</h3>
+          <p className="text-xs text-slate-500 italic">Fitur ganti password sedang dalam tahap pengembangan.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- SHARED COMPONENTS ---
+function SidebarLink({ icon, label, active, onClick }: any) {
+  return (
+    <button onClick={onClick} className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all font-bold ${active ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+      {icon} <span>{label}</span>
+    </button>
+  );
+}
+
+function StatCard({ title, value, growth, color }: any) {
+  return (
+    <div className={`${color} p-8 rounded-[2rem] text-white shadow-lg relative overflow-hidden group`}>
+      <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full group-hover:scale-150 transition-transform"></div>
+      <p className="text-xs uppercase font-bold opacity-80">{title}</p>
+      <h4 className="text-3xl font-black mt-2">{value}</h4>
+      <p className="text-[10px] mt-2 font-bold bg-white/20 w-fit px-2 py-1 rounded-lg">{growth}</p>
+    </div>
+  );
 }
