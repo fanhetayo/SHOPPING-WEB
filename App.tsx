@@ -16,12 +16,13 @@ export default function App() {
   const [isLiveChatOpen, setIsLiveChatOpen] = useState(false);
   const [products, setProducts] = useState<any[]>([]);
   const [cart, setCart] = useState<any[]>([]);
-  const [view, setView] = useState('shop'); 
+  const [view, setView] = useState('shop'); // shop, checkout, detail
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
   const [selectedVariant, setSelectedVariant] = useState<string>('');
   const [settings, setSettings] = useState<any>(null);
 
+  // State Form Checkout
   const [customerName, setCustomerName] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -39,20 +40,26 @@ export default function App() {
       s0.parentNode?.insertBefore(s1, s0);
     })();
 
+    // Midtrans Snap Script
+    const midtransScriptUrl = 'https://app.sandbox.midtrans.com/snap/snap.js';
+    const script = document.createElement('script');
+    script.src = midtransScriptUrl;
+    script.async = true;
+    
     const fetchSettings = async () => {
         const { data } = await supabase.from('settings').select('*').single();
         if(data) {
             setSettings(data);
-            if(data.midtrans_client_key) {
-                const script = document.createElement('script');
-                script.src = 'https://app.sandbox.midtrans.com/snap/snap.js';
-                script.setAttribute('data-client-key', data.midtrans_client_key);
-                script.async = true;
-                document.body.appendChild(script);
-            }
+            script.setAttribute('data-client-key', data.midtrans_client_key);
+            document.body.appendChild(script);
         }
     };
     fetchSettings();
+
+    return () => { 
+        const s = document.querySelector(`script[src="${midtransScriptUrl}"]`);
+        if(s) document.body.removeChild(s); 
+    }
   }, []);
 
   useEffect(() => {
@@ -64,10 +71,12 @@ export default function App() {
     };
     getData();
 
-    const sub = supabase.channel('api-realtime-v3')
+    const sub = supabase.channel('api-realtime-v2')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, getData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_methods' }, getData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, () => window.location.reload())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, () => {
+          supabase.from('settings').select('*').single().then(({data}) => setSettings(data));
+      })
       .subscribe();
     return () => { supabase.removeChannel(sub); };
   }, []);
@@ -96,29 +105,30 @@ export default function App() {
     window.scrollTo(0,0);
   };
 
+  // Fungsi Helper untuk Simpan Pesanan ke Database Admin
+  const saveOrderToDb = async (orderId: string, paymentMethodName: string) => {
+    const { error } = await supabase.from('orders').insert([{
+      id: orderId,
+      customer_name: customerName,
+      customer_address: customerAddress,
+      customer_phone: customerPhone,
+      items: cart,
+      total_price: totalPrice,
+      payment_method: paymentMethodName,
+      status: 'pending'
+    }]);
+    if (error) throw error;
+  };
+
   const handleConfirmPayment = async () => {
     if (!customerName || !customerAddress || !customerPhone || !selectedPayment) {
       return alert("Mohon lengkapi data diri dan pilih metode pembayaran!");
     }
 
-    const orderId = `ZYHA-${Date.now()}`;
-    const orderData = {
-        id: orderId,
-        customer_name: customerName,
-        customer_address: customerAddress,
-        customer_phone: customerPhone,
-        items: cart,
-        total_price: totalPrice,
-        payment_method: selectedPayment.name || selectedPayment.type,
-        status: 'pending'
-    };
-
     try {
-      // 1. SIMPAN KE DATABASE DULU (WAJIB agar admin bisa lihat)
-      const { error: dbError } = await supabase.from('orders').insert([orderData]);
-      if (dbError) throw dbError;
+      const orderId = `ZYHA-${Date.now()}`;
 
-      // 2. Logic untuk MIDTRANS
+      // 1. Logic untuk MIDTRANS
       if (selectedPayment.type === 'Midtrans') {
         const { data: functionData, error: functionError } = await supabase.functions.invoke('rapid-api', {
           body: {
@@ -128,7 +138,10 @@ export default function App() {
           }
         });
 
-        if (functionError || !functionData?.token) throw new Error("Gagal mendapatkan token pembayaran.");
+        if (functionError) throw new Error("Gagal terhubung ke server pembayaran.");
+        
+        // Simpan ke DB dulu sebelum buka Snap
+        await saveOrderToDb(orderId, 'Midtrans');
 
         if (window.snap) {
           window.snap.pay(functionData.token, {
@@ -137,34 +150,38 @@ export default function App() {
               alert("Pembayaran Berhasil!");
               setCart([]); setView('shop');
             },
-            onPending: () => { alert("Menunggu Pembayaran."); setCart([]); setView('shop'); },
-            onClose: () => { alert("Pembayaran dibatalkan."); }
+            onPending: () => {
+              alert("Pesanan disimpan. Segera selesaikan pembayaran.");
+              setCart([]); setView('shop');
+            },
+            onClose: () => { alert("Jendela pembayaran ditutup."); }
           });
         }
         return;
       }
 
-      // 3. Logic untuk MANUAL (WhatsApp)
-      const adminWA = settings?.wa_number || "628123456789"; 
+      // 2. Logic untuk MANUAL (WhatsApp)
+      // Simpan ke DB Admin dulu agar pesanan tidak hilang
+      await saveOrderToDb(orderId, selectedPayment.name);
+
+      const adminWA = settings?.admin_phone || "628123456789"; 
       const itemText = cart.map(it => `- ${it.title} (${it.selectedVariant || 'Default'}): Rp ${it.price.toLocaleString()}`).join('%0A');
-      const message = `*PESANAN BARU - ${settings?.store_name || 'ZYHA'}*%0A%0A` +
+      const message = `*PESANAN BARU #${orderId.slice(-6)}*%0A%0A` +
                       `*Data Pelanggan:*%0A` +
                       `Nama: ${customerName}%0A` +
-                      `Alamat: ${customerAddress}%0A` +
-                      `No. WA: ${customerPhone}%0A%0A` +
+                      `Alamat: ${customerAddress}%0A%0A` +
                       `*Detail Pesanan:*%0A${itemText}%0A%0A` +
-                      `*Total Tagihan:* Rp ${totalPrice.toLocaleString()}%0A` +
-                      `*Metode Bayar:* ${selectedPayment.name}%0A%0A` +
-                      `Mohon segera diproses.`;
+                      `*Total:* Rp ${totalPrice.toLocaleString()}%0A` +
+                      `*Metode:* ${selectedPayment.name}`;
 
       window.open(`https://wa.me/${adminWA}?text=${message}`, '_blank');
       setCart([]);
       setView('shop');
-      alert("Pesanan terkirim ke admin!");
+      alert("Pesanan tersimpan dan diteruskan ke WhatsApp!");
 
     } catch (err: any) {
       console.error(err);
-      alert("Gagal memproses pesanan: " + (err.message || "Terjadi kesalahan"));
+      alert("Gagal memproses pesanan: " + err.message);
     }
   };
 
@@ -187,7 +204,7 @@ export default function App() {
         </div>
       </nav>
 
-      {/* CART DRAWER - TETAP SAMA */}
+      {/* CART DRAWER */}
       {showCart && (
         <div className="fixed inset-0 z-[200] flex justify-end">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowCart(false)}></div>
@@ -231,14 +248,9 @@ export default function App() {
 
           <section className="max-w-7xl mx-auto px-6 py-20">
              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                {settings?.categories?.map((cat: any, i: number) => (
-                    <CategoryCard key={i} name={cat.name} icon={cat.icon || "📦"} />
-                )) || (
-                    <>
-                        <CategoryCard name="Elektronik" icon="📱" />
-                        <CategoryCard name="Fashion" icon="👕" />
-                    </>
-                )}
+                {(settings?.categories || ["Elektronik", "Fashion", "Sepatu"]).map((cat: string) => (
+                    <CategoryCard key={cat} name={cat} icon="✨" />
+                ))}
              </div>
           </section>
 
@@ -258,7 +270,6 @@ export default function App() {
         </>
       )}
 
-      {/* DETAIL & CHECKOUT VIEW TETAP SAMA DENGAN LOGIKA TERBARU DI handleConfirmPayment */}
       {view === 'detail' && selectedProduct && (
         <section className="pt-32 px-6 max-w-7xl mx-auto pb-32 animate-in fade-in duration-500">
           <button onClick={() => setView('shop')} className="mb-8 flex items-center gap-2 font-bold text-slate-400 hover:text-slate-900 transition-colors">
@@ -373,7 +384,8 @@ export default function App() {
   );
 }
 
-// SHARED COMPONENTS SEPERTI ImageSlider, ProductDisplay, DLL TETAP SAMA SEPERTI ASLINYA
+// --- SUB COMPONENTS ---
+
 function ImageSlider({ images }: { images: any }) {
   const [current, setCurrent] = useState(0);
   
@@ -420,19 +432,19 @@ function ImageSlider({ images }: { images: any }) {
 function ProductDisplay({ product, onClick, onAdd }: any) {
   return (
     <div className="group">
-        <div className="relative aspect-[4/5] bg-slate-100 rounded-[2.5rem] overflow-hidden mb-6 shadow-sm cursor-pointer" onClick={onClick}>
-           <ImageSlider images={Array.isArray(product.images) && product.images.length > 0 ? product.images : [product.image_url || product.image]} />
-           <button onClick={(e) => { e.stopPropagation(); onAdd(); }} className="absolute bottom-6 right-6 p-4 bg-slate-900 text-white rounded-2xl opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0 transition-all duration-300 shadow-xl z-10">
-               <Plus />
-           </button>
-        </div>
-        <div className="space-y-1 cursor-pointer" onClick={onClick}>
-           <div className="flex items-center gap-1 text-yellow-500 mb-2">
-             {[1,2,3,4,5].map(i => <Star key={i} size={14} fill="currentColor" />)}
-           </div>
-           <h3 className="text-xl font-bold tracking-tight text-slate-800 group-hover:text-blue-600 transition-colors">{product.title}</h3>
-           <p className="text-slate-900 font-black text-lg">Rp {product.price?.toLocaleString()}</p>
-        </div>
+       <div className="relative aspect-[4/5] bg-slate-100 rounded-[2.5rem] overflow-hidden mb-6 shadow-sm cursor-pointer" onClick={onClick}>
+          <ImageSlider images={Array.isArray(product.images) && product.images.length > 0 ? product.images : [product.image_url || product.image]} />
+          <button onClick={(e) => { e.stopPropagation(); onAdd(); }} className="absolute bottom-6 right-6 p-4 bg-slate-900 text-white rounded-2xl opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0 transition-all duration-300 shadow-xl z-10">
+              <Plus />
+          </button>
+       </div>
+       <div className="space-y-1 cursor-pointer" onClick={onClick}>
+          <div className="flex items-center gap-1 text-yellow-500 mb-2">
+            {[1,2,3,4,5].map(i => <Star key={i} size={14} fill="currentColor" />)}
+          </div>
+          <h3 className="text-xl font-bold tracking-tight text-slate-800 group-hover:text-blue-600 transition-colors">{product.title}</h3>
+          <p className="text-slate-900 font-black text-lg">Rp {product.price?.toLocaleString()}</p>
+       </div>
     </div>
   );
 }
