@@ -21,6 +21,7 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
   const [selectedVariant, setSelectedVariant] = useState<string>('');
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // State Form Checkout
   const [customerName, setCustomerName] = useState('');
@@ -50,9 +51,12 @@ export default function App() {
     };
     getData();
 
-    const sub = supabase.channel('api-realtime')
+    const sub = supabase.channel('api-realtime-admin')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, getData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_methods' }, getData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+         // Refresh orders logic if needed in Admin Dashboard context
+      })
       .subscribe();
     return () => { supabase.removeChannel(sub); };
   }, []);
@@ -81,16 +85,18 @@ export default function App() {
     window.scrollTo(0,0);
   };
 
-  // --- FITUR MIDTRANS & REALTIME SYNC ---
+  // --- FITUR MIDTRANS & REALTIME SYNC UNTUK ADMIN ---
   const handleConfirmPayment = async () => {
     if (!customerName || !customerAddress || !customerPhone || !selectedPayment) {
-      return alert("Mohon lengkapi data diri dan pilih metode pembayaran!");
+      return alert("Mohon lengkapi data diri!");
     }
 
-    try {
-      const orderId = `ZYHA-${Math.floor(1000 + Math.random() * 9000)}-${Date.now().toString().slice(-4)}`;
+    setIsProcessing(true);
 
-      // 1. Ambil Snap Token dari Edge Function
+    try {
+      const orderId = `ZYHA-ADMIN-${Math.floor(1000 + Math.random() * 9000)}`;
+
+      // 1. Ambil Snap Token
       const { data: snapData, error: snapError } = await supabase.functions.invoke('create-midtrans-token', {
         body: { 
           orderId: orderId,
@@ -99,19 +105,22 @@ export default function App() {
             first_name: customerName,
             phone: customerPhone,
             address: customerAddress
-          }
+          },
+          itemDetails: cart.map(item => ({
+            id: item.id,
+            price: item.price,
+            quantity: 1,
+            name: item.title.substring(0, 50)
+          }))
         }
       });
 
-      if (snapError || !snapData?.token) {
-        throw new Error("Gagal mendapatkan token pembayaran");
-      }
+      if (snapError || !snapData?.token) throw new Error("Gagal memproses token Midtrans.");
 
       // 2. Jalankan Midtrans Snap Popup
       window.snap.pay(snapData.token, {
         onSuccess: async (result: any) => {
-          // Simpan ke Database dengan status 'paid'
-          const { error } = await supabase.from('orders').insert([{
+          await supabase.from('orders').insert([{
             order_id: orderId,
             customer_name: customerName,
             customer_address: customerAddress,
@@ -122,15 +131,12 @@ export default function App() {
             status: 'paid',
             midtrans_id: result.transaction_id
           }]);
-          
-          if (error) console.error("DB Error:", error);
-          
-          alert("Pembayaran Berhasil! Pesanan Anda sedang diproses.");
+          alert("Transaksi Sukses (Admin Mode)");
           setCart([]);
           setView('shop');
+          setIsProcessing(false);
         },
         onPending: async (result: any) => {
-          // Simpan ke Database dengan status 'pending'
           await supabase.from('orders').insert([{
             order_id: orderId,
             customer_name: customerName,
@@ -139,24 +145,24 @@ export default function App() {
             items: cart,
             total_price: totalPrice,
             payment_method: selectedPayment.name,
-            status: 'pending'
+            status: 'pending',
+            midtrans_id: result.transaction_id
           }]);
-          
-          alert("Pesanan disimpan. Silakan selesaikan pembayaran Anda.");
+          alert("Transaksi Pending.");
           setCart([]);
           setView('shop');
+          setIsProcessing(false);
         },
-        onError: (result: any) => {
-          alert("Pembayaran Gagal. Silakan coba lagi.");
-        },
-        onClose: () => {
-          alert('Anda menutup bantuan pembayaran sebelum selesai.');
+        onError: () => {
+           alert("Transaksi Gagal.");
+           setIsProcessing(false);
         }
       });
 
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Terjadi kesalahan sistem saat memproses pembayaran.");
+      alert("Error: " + err.message);
+      setIsProcessing(false);
     }
   };
 
@@ -348,8 +354,12 @@ export default function App() {
                   <span className="text-blue-400">Rp {totalPrice.toLocaleString()}</span>
                 </div>
               </div>
-              <button onClick={handleConfirmPayment} className="w-full bg-blue-600 py-5 rounded-2xl font-black text-lg hover:bg-blue-700 transition-all flex items-center justify-center gap-2">
-                <CreditCard size={20} /> BAYAR AMAN (MIDTRANS)
+              <button 
+                onClick={handleConfirmPayment} 
+                disabled={isProcessing}
+                className={`w-full py-5 rounded-2xl font-black text-lg transition-all flex items-center justify-center gap-2 ${isProcessing ? 'bg-slate-700 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-200'} text-white`}
+              >
+                <CreditCard size={20} /> {isProcessing ? 'MEMPROSES...' : 'BAYAR AMAN (MIDTRANS)'}
               </button>
             </div>
           </div>
