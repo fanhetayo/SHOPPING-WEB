@@ -20,6 +20,7 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
   const [selectedVariant, setSelectedVariant] = useState<string>('');
+  const [mainImage, setMainImage] = useState<string>(''); // State tambahan untuk gambar utama
   const [settings, setSettings] = useState<any>(null);
 
   // State Form Checkout
@@ -101,11 +102,20 @@ export default function App() {
   const openDetail = (product: any) => {
     setSelectedProduct(product);
     setSelectedVariant(product.variants?.[0]?.name || '');
+    // Set gambar utama ke gambar pertama produk saat dibuka
+    setMainImage(product.images?.[0] || product.image_url || product.image);
     setView('detail');
     window.scrollTo(0,0);
   };
 
-  // Fungsi Helper untuk Simpan Pesanan ke Database Admin
+  // Fungsi perbaikan klik variant
+  const handleVariantClick = (v: any) => {
+    setSelectedVariant(v.name);
+    if (v.image) {
+      setMainImage(v.image);
+    }
+  };
+
   const saveOrderToDb = async (orderId: string, paymentMethodName: string) => {
     const { error } = await supabase.from('orders').insert([{
       id: orderId,
@@ -128,7 +138,6 @@ export default function App() {
     try {
       const orderId = `ZYHA-${Date.now()}`;
 
-      // 1. Logic untuk MIDTRANS
       if (selectedPayment.type === 'Midtrans') {
         const { data: functionData, error: functionError } = await supabase.functions.invoke('rapid-api', {
           body: {
@@ -140,7 +149,6 @@ export default function App() {
 
         if (functionError) throw new Error("Gagal terhubung ke server pembayaran.");
         
-        // Simpan ke DB dulu sebelum buka Snap
         await saveOrderToDb(orderId, 'Midtrans');
 
         if (window.snap) {
@@ -160,8 +168,6 @@ export default function App() {
         return;
       }
 
-      // 2. Logic untuk MANUAL (WhatsApp)
-      // Simpan ke DB Admin dulu agar pesanan tidak hilang
       await saveOrderToDb(orderId, selectedPayment.name);
 
       const adminWA = settings?.admin_phone || "628123456789"; 
@@ -204,7 +210,6 @@ export default function App() {
         </div>
       </nav>
 
-      {/* CART DRAWER */}
       {showCart && (
         <div className="fixed inset-0 z-[200] flex justify-end">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowCart(false)}></div>
@@ -257,8 +262,8 @@ export default function App() {
           <section className="max-w-7xl mx-auto px-6 pb-32">
             <div className="flex justify-between items-end mb-12">
               <div>
-                 <h2 className="text-4xl font-black italic uppercase tracking-tighter">Katalog Produk <span className="text-blue-600 text-6xl">.</span></h2>
-                 <p className="text-slate-400 font-medium">Temukan gaya terbaikmu hari ini.</p>
+                  <h2 className="text-4xl font-black italic uppercase tracking-tighter">Katalog Produk <span className="text-blue-600 text-6xl">.</span></h2>
+                  <p className="text-slate-400 font-medium">Temukan gaya terbaikmu hari ini.</p>
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-10">
@@ -278,7 +283,11 @@ export default function App() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-16">
             <div className="space-y-6">
               <div className="rounded-[3rem] overflow-hidden shadow-2xl bg-slate-100 aspect-square">
-                <ImageSlider images={selectedProduct.images && Array.isArray(selectedProduct.images) && selectedProduct.images.length > 0 ? selectedProduct.images : [selectedProduct.image_url || selectedProduct.image]} />
+                {/* Menggunakan forceImage dari state mainImage */}
+                <ImageSlider 
+                  images={selectedProduct.images && Array.isArray(selectedProduct.images) && selectedProduct.images.length > 0 ? selectedProduct.images : [selectedProduct.image_url || selectedProduct.image]} 
+                  forceImage={mainImage}
+                />
               </div>
             </div>
             <div className="space-y-8">
@@ -300,7 +309,7 @@ export default function App() {
                     {selectedProduct.variants.map((v: any, idx: number) => (
                       <button 
                         key={idx} 
-                        onClick={() => setSelectedVariant(v.name)}
+                        onClick={() => handleVariantClick(v)}
                         className={`px-6 py-3 rounded-2xl font-bold border-2 transition-all flex items-center gap-3 ${selectedVariant === v.name ? 'border-blue-600 bg-blue-50 text-blue-600' : 'border-slate-100 bg-white text-slate-400'}`}
                       >
                         {v.image && <img src={v.image} className="w-6 h-6 rounded-lg object-cover" />}
@@ -386,7 +395,7 @@ export default function App() {
 
 // --- SUB COMPONENTS ---
 
-function ImageSlider({ images }: { images: any }) {
+function ImageSlider({ images, forceImage }: { images: any, forceImage?: string }) {
   const [current, setCurrent] = useState(0);
   
   const safeImages = React.useMemo(() => {
@@ -394,6 +403,16 @@ function ImageSlider({ images }: { images: any }) {
     if (typeof images === 'string' && images.trim() !== '') return [images];
     return [];
   }, [images]);
+
+  // Efek untuk merespon perubahan forceImage (ketika variant diklik)
+  useEffect(() => {
+    if (forceImage) {
+      const index = safeImages.indexOf(forceImage);
+      if (index !== -1) {
+        setCurrent(index);
+      }
+    }
+  }, [forceImage, safeImages]);
 
   useEffect(() => {
     if (safeImages.length <= 1) return;
