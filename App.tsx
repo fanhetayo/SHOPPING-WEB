@@ -5,6 +5,13 @@ import {
   ChevronRight, ArrowRight, User, Heart, X, Trash2, Send, Plus, CreditCard, Landmark, QrCode, ChevronLeft
 } from 'lucide-react';
 
+// Declare global for Midtrans Snap
+declare global {
+  interface Window {
+    snap: any;
+  }
+}
+
 export default function App() {
   const [showCart, setShowCart] = useState(false);
   const [isLiveChatOpen, setIsLiveChatOpen] = useState(false);
@@ -14,6 +21,7 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
   const [selectedVariant, setSelectedVariant] = useState<string>('');
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // State Form Checkout
   const [customerName, setCustomerName] = useState('');
@@ -74,49 +82,92 @@ export default function App() {
     window.scrollTo(0,0);
   };
 
-  // --- FITUR WHATSAPP & SAVE TO DATABASE ---
+  // --- FITUR MIDTRANS INTEGRATION ---
   const handleConfirmPayment = async () => {
     if (!customerName || !customerAddress || !customerPhone || !selectedPayment) {
       return alert("Mohon lengkapi data diri dan pilih metode pembayaran!");
     }
 
+    setIsProcessing(true);
+
     try {
-      // 1. Simpan ke Database (Agar masuk ke Admin.tsx)
-      const { error } = await supabase.from('orders').insert([{
-        customer_name: customerName,
-        customer_address: customerAddress,
-        customer_phone: customerPhone,
-        items: cart,
-        total_price: totalPrice,
-        payment_method: selectedPayment.name,
-        status: 'pending'
-      }]);
+      const orderId = `ZYHA-${Math.floor(1000 + Math.random() * 9000)}-${Date.now().toString().slice(-4)}`;
 
-      if (error) throw error;
+      // 1. Ambil Snap Token dari Edge Function
+      const { data: snapData, error: snapError } = await supabase.functions.invoke('create-midtrans-token', {
+        body: { 
+          orderId: orderId,
+          grossAmount: totalPrice,
+          customerDetails: {
+            first_name: customerName,
+            phone: customerPhone,
+            address: customerAddress
+          },
+          itemDetails: cart.map(item => ({
+            id: item.id,
+            price: item.price,
+            quantity: 1,
+            name: item.title.substring(0, 50)
+          }))
+        }
+      });
 
-      // 2. Format Pesan WhatsApp
-      const adminWA = "628123456789"; // GANTI DENGAN NOMOR WA ANDA
-      const itemText = cart.map(it => `- ${it.title} (${it.selectedVariant || 'Default'}): Rp ${it.price.toLocaleString()}`).join('%0A');
-      
-      const message = `*PESANAN BARU - ZYHA ID*%0A%0A` +
-                      `*Data Pelanggan:*%0A` +
-                      `Nama: ${customerName}%0A` +
-                      `Alamat: ${customerAddress}%0A` +
-                      `No. WA: ${customerPhone}%0A%0A` +
-                      `*Detail Pesanan:*%0A${itemText}%0A%0A` +
-                      `*Total Tagihan:* Rp ${totalPrice.toLocaleString()}%0A` +
-                      `*Metode Bayar:* ${selectedPayment.name}%0A%0A` +
-                      `Mohon segera diproses. Terima kasih!`;
+      if (snapError || !snapData?.token) {
+        throw new Error("Gagal mendapatkan token pembayaran. Pastikan Edge Function sudah aktif.");
+      }
 
-      // 3. Redirect ke WA & Reset State
-      window.open(`https://wa.me/${adminWA}?text=${message}`, '_blank');
-      setCart([]);
-      setView('shop');
-      alert("Pesanan terkirim ke admin! Silakan konfirmasi di WhatsApp.");
+      // 2. Jalankan Midtrans Snap Popup
+      window.snap.pay(snapData.token, {
+        onSuccess: async (result: any) => {
+          await supabase.from('orders').insert([{
+            order_id: orderId,
+            customer_name: customerName,
+            customer_address: customerAddress,
+            customer_phone: customerPhone,
+            items: cart,
+            total_price: totalPrice,
+            payment_method: selectedPayment.name,
+            status: 'paid',
+            midtrans_id: result.transaction_id
+          }]);
+          
+          alert("Pembayaran Berhasil!");
+          setCart([]);
+          setView('shop');
+          setIsProcessing(false);
+        },
+        onPending: async (result: any) => {
+          await supabase.from('orders').insert([{
+            order_id: orderId,
+            customer_name: customerName,
+            customer_address: customerAddress,
+            customer_phone: customerPhone,
+            items: cart,
+            total_price: totalPrice,
+            payment_method: selectedPayment.name,
+            status: 'pending',
+            midtrans_id: result.transaction_id
+          }]);
+          
+          alert("Pesanan Tertunda. Selesaikan pembayaran Anda.");
+          setCart([]);
+          setView('shop');
+          setIsProcessing(false);
+        },
+        onError: (result: any) => {
+          alert("Pembayaran Gagal.");
+          setIsProcessing(false);
+        },
+        onClose: () => {
+          alert('Anda menutup jendela pembayaran.');
+          setIsProcessing(false);
+        }
+      });
 
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Gagal memproses pesanan.");
+      alert(err.message || "Terjadi kesalahan sistem.");
+      setIsProcessing(false);
     }
   };
 
@@ -308,8 +359,12 @@ export default function App() {
                   <span className="text-blue-400">Rp {totalPrice.toLocaleString()}</span>
                 </div>
               </div>
-              <button onClick={handleConfirmPayment} className="w-full bg-blue-600 py-5 rounded-2xl font-black text-lg hover:bg-blue-700 transition-all flex items-center justify-center gap-2">
-                <MessageCircle size={20} /> BAYAR SEKARANG (WA)
+              <button 
+                onClick={handleConfirmPayment} 
+                disabled={isProcessing}
+                className={`w-full py-5 rounded-2xl font-black text-lg transition-all flex items-center justify-center gap-2 ${isProcessing ? 'bg-slate-700 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-200'} text-white`}
+              >
+                <CreditCard size={20} /> {isProcessing ? 'MEMPROSES...' : 'BAYAR AMAN (MIDTRANS)'}
               </button>
             </div>
           </div>
