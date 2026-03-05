@@ -253,7 +253,7 @@ export default function App() {
            </h2>
         </div>
         
-        <button className="bg-white text-slate-900 px-10 py-5 rounded-2xl font-black w-fit hover:bg-blue-600 hover:text-white transition-all shadow-2xl flex items-center gap-4 group/btn">
+        <button className="bg-yellow text-slate-900 px-10 py-5 rounded-2xl font-black w-fit hover:bg-blue-600 hover:text-white transition-all shadow-2xl flex items-center gap-4 group/btn">
             BELANJA KOLEKSI <ChevronRight className="group-hover/btn:translate-x-2 transition-transform" />
         </button>
      </div>
