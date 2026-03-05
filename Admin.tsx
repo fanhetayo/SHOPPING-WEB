@@ -146,8 +146,11 @@ function ProductSection() {
     if (!productData.title || !productData.price) return alert("Isi data produk!");
     
     setLoading(true);
+    // Destructure untuk menghindari pengiriman ID atau field yang tidak perlu saat insert/update
+    const { id, created_at, ...cleanData } = productData as any;
+    
     const payload = { 
-      ...productData,
+      ...cleanData,
       price: Number(productData.price),
       images: Array.isArray(productData.images) ? productData.images : [],
       variants: Array.isArray(productData.variants) ? productData.variants : []
@@ -169,6 +172,19 @@ function ProductSection() {
       alert("Gagal simpan produk: " + err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async (id: any) => {
+    if (confirm('Hapus produk ini?')) {
+      try {
+        const { error } = await supabase.from('products').delete().eq('id', id);
+        if (error) throw error;
+        alert("Produk berhasil dihapus");
+        fetchProducts();
+      } catch (err: any) {
+        alert("Gagal menghapus: " + err.message);
+      }
     }
   };
 
@@ -280,7 +296,7 @@ function ProductSection() {
                 <td className="p-6">
                   <div className="flex justify-center gap-2">
                     <button onClick={() => {setEditingId(p.id); setProductData(p)}} className="p-3 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all"><Edit size={18}/></button>
-                    <button onClick={async () => { if(confirm('Hapus produk ini?')) { await supabase.from('products').delete().eq('id',p.id); fetchProducts(); } }} className="p-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all"><Trash2 size={18}/></button>
+                    <button onClick={() => handleDelete(p.id)} className="p-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all"><Trash2 size={18}/></button>
                   </div>
                 </td>
               </tr>
@@ -318,10 +334,28 @@ function BankSection() {
 
   const handleSave = async () => {
     if(!data.name && data.type !== 'Midtrans') return alert("Isi nama metode!");
-    await supabase.from('payment_methods').insert([data]);
-    setData({ name: '', account_number: '', account_holder: '', type: 'Bank', qris_url: '' });
-    fetchMethods();
+    try {
+        const { error } = await supabase.from('payment_methods').insert([data]);
+        if (error) throw error;
+        setData({ name: '', account_number: '', account_holder: '', type: 'Bank', qris_url: '' });
+        fetchMethods();
+        alert("Metode berhasil ditambahkan!");
+    } catch (e: any) {
+        alert(e.message);
+    }
   };
+
+  const handleDeleteBank = async (id: any) => {
+    if(confirm('Hapus metode pembayaran ini?')) {
+        try {
+            const { error } = await supabase.from('payment_methods').delete().eq('id', id);
+            if (error) throw error;
+            fetchMethods();
+        } catch (e: any) {
+            alert(e.message);
+        }
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -356,7 +390,7 @@ function BankSection() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {methods.map(m => (
           <div key={m.id} className="bg-white p-6 rounded-3xl border shadow-sm relative group hover:border-blue-500 transition-all">
-            <button className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 text-red-500 transition-all" onClick={async () => {if(confirm('Hapus?')) { await supabase.from('payment_methods').delete().eq('id',m.id); fetchMethods();}}}><Trash2 size={16}/></button>
+            <button className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 text-red-500 transition-all" onClick={() => handleDeleteBank(m.id)}><Trash2 size={16}/></button>
             <div className="flex items-center gap-4 mb-4">
                 <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl">{m.type === 'QRIS' ? <QrCode/> : m.type === 'Midtrans' ? <CreditCard/> : <Landmark/>}</div>
                 <div><p className="text-xs font-bold text-slate-400 uppercase tracking-tighter">{m.type}</p><h4 className="font-black text-xl italic">{m.name || (m.type === 'Midtrans' ? 'Midtrans' : '')}</h4></div>
