@@ -20,17 +20,15 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
   const [selectedVariant, setSelectedVariant] = useState<string>('');
-  const [mainImage, setMainImage] = useState<string>(''); // State baru untuk gambar utama detail
+  const [mainImage, setMainImage] = useState<string>(''); 
   const [settings, setSettings] = useState<any>(null);
 
-  // State Form Checkout
   const [customerName, setCustomerName] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [selectedPayment, setSelectedPayment] = useState<any>(null);
 
   useEffect(() => {
-    // Tawk.to
     var Tawk_API: any = Tawk_API || {}, Tawk_LoadStart = new Date();
     (function(){
       var s1 = document.createElement("script"), s0 = document.getElementsByTagName("script")[0];
@@ -41,7 +39,6 @@ export default function App() {
       s0.parentNode?.insertBefore(s1, s0);
     })();
 
-    // Midtrans Snap Script
     const midtransScriptUrl = 'https://app.sandbox.midtrans.com/snap/snap.js';
     const script = document.createElement('script');
     script.src = midtransScriptUrl;
@@ -102,16 +99,15 @@ export default function App() {
   const openDetail = (product: any) => {
     setSelectedProduct(product);
     setSelectedVariant(product.variants?.[0]?.name || '');
-    // Set gambar utama awal saat membuka detail
     const initialImg = product.images?.[0] || product.image_url || product.image;
     setMainImage(initialImg);
     setView('detail');
     window.scrollTo(0,0);
   };
 
-  const saveOrderToDb = async (orderId: string, paymentMethodName: string) => {
-    const { error } = await supabase.from('orders').insert([{
-      id: orderId,
+  // FUNGSI PERBAIKAN: Menghapus parameter orderId agar DB menggunakan UUID otomatis
+  const saveOrderToDb = async (paymentMethodName: string) => {
+    const { data, error } = await supabase.from('orders').insert([{
       customer_name: customerName,
       customer_address: customerAddress,
       customer_phone: customerPhone,
@@ -119,8 +115,10 @@ export default function App() {
       total_price: totalPrice,
       payment_method: paymentMethodName,
       status: 'pending'
-    }]);
+    }]).select().single(); // Mengambil data yang baru diinsert
+    
     if (error) throw error;
+    return data; // Mengembalikan data order termasuk ID UUID asli dari DB
   };
 
   const handleConfirmPayment = async () => {
@@ -129,25 +127,28 @@ export default function App() {
     }
 
     try {
-      const orderId = `ZYHA-${Date.now()}`;
+      // Readable ID hanya untuk tampilan WA, bukan untuk primary key DB
+      const displayOrderId = `ZYHA-${Date.now().toString().slice(-6)}`;
 
       if (selectedPayment.type === 'Midtrans') {
+        // Simpan dulu ke DB untuk dapat UUID asli
+        const newOrder = await saveOrderToDb('Midtrans');
+        const dbUuid = newOrder.id;
+
         const { data: functionData, error: functionError } = await supabase.functions.invoke('rapid-api', {
           body: {
-            orderId: orderId,
+            orderId: dbUuid, // Gunakan UUID asli untuk Midtrans
             grossAmount: totalPrice,
             customerDetails: { first_name: customerName, phone: customerPhone, address: customerAddress }
           }
         });
 
         if (functionError) throw new Error("Gagal terhubung ke server pembayaran.");
-        
-        await saveOrderToDb(orderId, 'Midtrans');
 
         if (window.snap) {
           window.snap.pay(functionData.token, {
             onSuccess: async () => {
-              await supabase.from('orders').update({ status: 'paid' }).eq('id', orderId);
+              await supabase.from('orders').update({ status: 'paid' }).eq('id', dbUuid);
               alert("Pembayaran Berhasil!");
               setCart([]); setView('shop');
             },
@@ -161,11 +162,12 @@ export default function App() {
         return;
       }
 
-      await saveOrderToDb(orderId, selectedPayment.name);
+      // Untuk pembayaran Manual/WA
+      await saveOrderToDb(selectedPayment.name);
 
       const adminWA = settings?.admin_phone || "628123456789"; 
       const itemText = cart.map(it => `- ${it.title} (${it.selectedVariant || 'Default'}): Rp ${it.price.toLocaleString()}`).join('%0A');
-      const message = `*PESANAN BARU #${orderId.slice(-6)}*%0A%0A` +
+      const message = `*PESANAN BARU #${displayOrderId}*%0A%0A` +
                       `*Data Pelanggan:*%0A` +
                       `Nama: ${customerName}%0A` +
                       `Alamat: ${customerAddress}%0A%0A` +
@@ -180,7 +182,7 @@ export default function App() {
 
     } catch (err: any) {
       console.error(err);
-      alert("Gagal memproses pesanan: " + err.message);
+      alert("Gagal memproses pesanan: " + (err.message || "Kesalahan Database (UUID Syntax)"));
     }
   };
 
@@ -276,7 +278,6 @@ export default function App() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-16">
             <div className="space-y-6">
               <div className="rounded-[3rem] overflow-hidden shadow-2xl bg-slate-100 aspect-square">
-                {/* Mengirim forcedImage agar slider berubah saat varian diklik */}
                 <ImageSlider 
                   images={selectedProduct.images && Array.isArray(selectedProduct.images) && selectedProduct.images.length > 0 ? selectedProduct.images : [selectedProduct.image_url || selectedProduct.image]} 
                   forcedImage={mainImage}
@@ -304,7 +305,7 @@ export default function App() {
                         key={idx} 
                         onClick={() => {
                           setSelectedVariant(v.name);
-                          if(v.image) setMainImage(v.image); // Update gambar utama saat varian diklik
+                          if(v.image) setMainImage(v.image);
                         }}
                         className={`px-6 py-3 rounded-2xl font-bold border-2 transition-all flex items-center gap-3 ${selectedVariant === v.name ? 'border-blue-600 bg-blue-50 text-blue-600' : 'border-slate-100 bg-white text-slate-400'}`}
                       >
@@ -399,14 +400,12 @@ function ImageSlider({ images, forcedImage }: { images: any, forcedImage?: strin
     if (Array.isArray(images)) list = images.filter(img => typeof img === 'string' && img.trim() !== '');
     else if (typeof images === 'string' && images.trim() !== '') list = [images];
 
-    // Jika ada forcedImage (dari klik varian) dan tidak ada di list, masukkan ke list agar bisa ditampilkan
     if (forcedImage && !list.includes(forcedImage)) {
       return [forcedImage, ...list];
     }
     return list;
   }, [images, forcedImage]);
 
-  // Effect untuk mengganti gambar slider jika forcedImage berubah
   useEffect(() => {
     if (forcedImage) {
       const index = safeImages.indexOf(forcedImage);
@@ -434,7 +433,6 @@ function ImageSlider({ images, forcedImage }: { images: any, forcedImage?: strin
           src={img} 
           className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${idx === current ? 'opacity-100' : 'opacity-0'}`} 
           alt="product"
-          onError={(e) => { (e.target as HTMLImageElement).src = 'https://placehold.co/600x600/e2e8f0/64748b?text=Image+Not+Found'; }}
         />
       ))}
       {safeImages.length > 1 && (
