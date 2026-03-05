@@ -145,15 +145,32 @@ function ProductSection() {
   const handleSave = async () => {
     if (!productData.title || !productData.price) return alert("Isi data produk!");
     
-    const payload = { ...productData };
-    if (editingId) {
-      await supabase.from('products').update(payload).eq('id', editingId);
-      setEditingId(null);
-    } else {
-      await supabase.from('products').insert([payload]);
+    setLoading(true);
+    // PERBAIKAN: Memastikan tipe data bersih untuk mencegah Error 400
+    const payload = { 
+      ...productData,
+      price: Number(productData.price),
+      images: Array.isArray(productData.images) ? productData.images : [],
+      variants: Array.isArray(productData.variants) ? productData.variants : []
+    };
+
+    try {
+      if (editingId) {
+        const { error } = await supabase.from('products').update(payload).eq('id', editingId);
+        if (error) throw error;
+        setEditingId(null);
+      } else {
+        const { error } = await supabase.from('products').insert([payload]);
+        if (error) throw error;
+      }
+      setProductData(initialData);
+      fetchProducts();
+      alert("Produk berhasil disimpan!");
+    } catch (err: any) {
+      alert("Gagal simpan produk: " + err.message);
+    } finally {
+      setLoading(false);
     }
-    setProductData(initialData);
-    fetchProducts();
   };
 
   return (
@@ -363,7 +380,6 @@ function OrderSection() {
 
   useEffect(() => {
     fetchOrders();
-    // REALTIME SYNC
     const subscription = supabase.channel('orders-admin')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchOrders)
       .subscribe();
@@ -451,11 +467,12 @@ function SettingsSection() {
 
   useEffect(() => {
     const fetchSettings = async () => {
-        const { data } = await supabase.from('settings').select('*').single();
-        if(data) {
-            setStoreName(data.store_name);
-            setMidtransClientKey(data.midtrans_client_key);
-            setMidtransServerKey(data.midtrans_server_key);
+        // PERBAIKAN: Menggunakan filter ID atau limit untuk mencegah error jika tabel kosong
+        const { data, error } = await supabase.from('settings').select('*').limit(1);
+        if(data && data.length > 0) {
+            setStoreName(data[0].store_name);
+            setMidtransClientKey(data[0].midtrans_client_key || '');
+            setMidtransServerKey(data[0].midtrans_server_key || '');
         }
     }
     fetchSettings();
@@ -467,8 +484,11 @@ function SettingsSection() {
         midtrans_client_key: midtransClientKey, 
         midtrans_server_key: midtransServerKey 
     };
-    await supabase.from('settings').upsert([payload]);
-    alert("Pengaturan Berhasil Disimpan & Sinkron Realtime!");
+    
+    // PERBAIKAN: Menggunakan upsert berdasarkan ID 1 agar tidak duplikat
+    const { error } = await supabase.from('settings').upsert([{ id: 1, ...payload }]);
+    if (error) alert("Error: " + error.message);
+    else alert("Pengaturan Berhasil Disimpan & Sinkron Realtime!");
   }
 
   return (
