@@ -5,7 +5,6 @@ import {
   ChevronRight, ArrowRight, User, Heart, X, Trash2, Send, Plus, CreditCard, Landmark, QrCode, ChevronLeft
 } from 'lucide-react';
 
-// Declare global for Midtrans Snap
 declare global {
   interface Window {
     snap: any;
@@ -21,7 +20,7 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
   const [selectedVariant, setSelectedVariant] = useState<string>('');
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [settings, setSettings] = useState<any>(null);
 
   // State Form Checkout
   const [customerName, setCustomerName] = useState('');
@@ -29,8 +28,9 @@ export default function App() {
   const [customerPhone, setCustomerPhone] = useState('');
   const [selectedPayment, setSelectedPayment] = useState<any>(null);
 
-  // --- IMPLEMENTASI TAWK.TO ---
+  // --- IMPLEMENTASI TAWK.TO & MIDTRANS SCRIPT ---
   useEffect(() => {
+    // Tawk.to
     var Tawk_API: any = Tawk_API || {}, Tawk_LoadStart = new Date();
     (function(){
       var s1 = document.createElement("script"), s0 = document.getElementsByTagName("script")[0];
@@ -40,6 +40,24 @@ export default function App() {
       s1.setAttribute('crossorigin', '*');
       s0.parentNode?.insertBefore(s1, s0);
     })();
+
+    // Midtrans Snap Script
+    const midtransScriptUrl = 'https://app.sandbox.midtrans.com/snap/snap.js'; // Gunakan 'app.midtrans.com' untuk production
+    const script = document.createElement('script');
+    script.src = midtransScriptUrl;
+    
+    // Ambil settings untuk Midtrans Client Key
+    const fetchSettings = async () => {
+        const { data } = await supabase.from('settings').select('*').single();
+        if(data) {
+            setSettings(data);
+            script.setAttribute('data-client-key', data.midtrans_client_key);
+        }
+    };
+    fetchSettings();
+    document.body.appendChild(script);
+
+    return () => { document.body.removeChild(script); }
   }, []);
 
   useEffect(() => {
@@ -54,6 +72,7 @@ export default function App() {
     const sub = supabase.channel('api-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, getData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_methods' }, getData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, () => window.location.reload())
       .subscribe();
     return () => { supabase.removeChannel(sub); };
   }, []);
@@ -82,92 +101,81 @@ export default function App() {
     window.scrollTo(0,0);
   };
 
-  // --- FITUR MIDTRANS INTEGRATION ---
+  // --- FITUR PEMBAYARAN (MIDTRANS & WHATSAPP) ---
   const handleConfirmPayment = async () => {
     if (!customerName || !customerAddress || !customerPhone || !selectedPayment) {
       return alert("Mohon lengkapi data diri dan pilih metode pembayaran!");
     }
 
-    setIsProcessing(true);
-
     try {
-      const orderId = `ZYHA-${Math.floor(1000 + Math.random() * 9000)}-${Date.now().toString().slice(-4)}`;
+      // Jika menggunakan Midtrans
+      if (selectedPayment.type === 'Midtrans') {
+        if (!settings?.midtrans_client_key) return alert("Sistem Midtrans belum dikonfigurasi oleh admin.");
+        
+        // Simpan Order ke DB dahulu
+        const { data: orderData, error } = await supabase.from('orders').insert([{
+            customer_name: customerName,
+            customer_address: customerAddress,
+            customer_phone: customerPhone,
+            items: cart,
+            total_price: totalPrice,
+            payment_method: 'Midtrans',
+            status: 'pending'
+        }]).select().single();
 
-      // 1. Ambil Snap Token dari Edge Function
-      const { data: snapData, error: snapError } = await supabase.functions.invoke('create-midtrans-token', {
-        body: { 
-          orderId: orderId,
-          grossAmount: totalPrice,
-          customerDetails: {
-            first_name: customerName,
-            phone: customerPhone,
-            address: customerAddress
-          },
-          itemDetails: cart.map(item => ({
-            id: item.id,
-            price: item.price,
-            quantity: 1,
-            name: item.title.substring(0, 50)
-          }))
-        }
-      });
+        if (error) throw error;
 
-      if (snapError || !snapData?.token) {
-        throw new Error("Gagal mendapatkan token pembayaran. Pastikan Edge Function sudah aktif.");
+        // Panggil Snap Popup (Integrasi Backend Required untuk Token, ini simulasi trigger snap)
+        // Note: Idealnya token di-generate dari Server-Side.
+        window.snap.pay('ISI_DENGAN_SNAP_TOKEN_DARI_BACKEND', {
+            onSuccess: async (result: any) => {
+                await supabase.from('orders').update({ status: 'paid' }).eq('id', orderData.id);
+                alert("Pembayaran Berhasil!");
+                setCart([]);
+                setView('shop');
+            },
+            onPending: (result: any) => alert("Menunggu Pembayaran..."),
+            onError: (result: any) => alert("Pembayaran Gagal!")
+        });
+        return;
       }
 
-      // 2. Jalankan Midtrans Snap Popup
-      window.snap.pay(snapData.token, {
-        onSuccess: async (result: any) => {
-          await supabase.from('orders').insert([{
-            order_id: orderId,
-            customer_name: customerName,
-            customer_address: customerAddress,
-            customer_phone: customerPhone,
-            items: cart,
-            total_price: totalPrice,
-            payment_method: selectedPayment.name,
-            status: 'paid',
-            midtrans_id: result.transaction_id
-          }]);
-          
-          alert("Pembayaran Berhasil!");
-          setCart([]);
-          setView('shop');
-          setIsProcessing(false);
-        },
-        onPending: async (result: any) => {
-          await supabase.from('orders').insert([{
-            order_id: orderId,
-            customer_name: customerName,
-            customer_address: customerAddress,
-            customer_phone: customerPhone,
-            items: cart,
-            total_price: totalPrice,
-            payment_method: selectedPayment.name,
-            status: 'pending',
-            midtrans_id: result.transaction_id
-          }]);
-          
-          alert("Pesanan Tertunda. Selesaikan pembayaran Anda.");
-          setCart([]);
-          setView('shop');
-          setIsProcessing(false);
-        },
-        onError: (result: any) => {
-          alert("Pembayaran Gagal.");
-          setIsProcessing(false);
-        },
-        onClose: () => {
-          alert('Anda menutup jendela pembayaran.');
-          setIsProcessing(false);
-        }
-      });
+      // 1. Simpan ke Database untuk Metode Manual
+      const { error } = await supabase.from('orders').insert([{
+        customer_name: customerName,
+        customer_address: customerAddress,
+        customer_phone: customerPhone,
+        items: cart,
+        total_price: totalPrice,
+        payment_method: selectedPayment.name,
+        status: 'pending'
+      }]);
 
-    } catch (err: any) {
+      if (error) throw error;
+
+      // 2. Format Pesan WhatsApp
+      const adminWA = "628123456789"; 
+      const itemText = cart.map(it => `- ${it.title} (${it.selectedVariant || 'Default'}): Rp ${it.price.toLocaleString()}`).join('%0A');
+      
+      const message = `*PESANAN BARU - ZYHA ID*%0A%0A` +
+                      `*Data Pelanggan:*%0A` +
+                      `Nama: ${customerName}%0A` +
+                      `Alamat: ${customerAddress}%0A` +
+                      `No. WA: ${customerPhone}%0A%0A` +
+                      `*Detail Pesanan:*%0A${itemText}%0A%0A` +
+                      `*Total Tagihan:* Rp ${totalPrice.toLocaleString()}%0A` +
+                      `*Metode Bayar:* ${selectedPayment.name}%0A%0A` +
+                      `Mohon segera diproses. Terima kasih!`;
+
+      // 3. Redirect ke WA & Reset State
+      window.open(`https://wa.me/${adminWA}?text=${message}`, '_blank');
+      setCart([]);
+      setView('shop');
+      alert("Pesanan terkirim ke admin! Silakan konfirmasi di WhatsApp.");
+
+    } catch (err) {
       console.error(err);
-      alert(err.message || "Terjadi kesalahan sistem.");
-      setIsProcessing(false);
+      alert("Gagal memproses pesanan.");
     }
   };
 
@@ -175,7 +183,7 @@ export default function App() {
     <div className="font-sans text-slate-900 selection:bg-blue-100">
       <nav className="fixed top-0 w-full z-[100] bg-white/70 backdrop-blur-2xl border-b border-slate-100 px-6 h-20 flex items-center justify-between">
         <div className="text-3xl font-black tracking-tighter text-slate-900 italic cursor-pointer" onClick={() => setView('shop')}>
-          ZYHA<span className="text-blue-600 underline decoration-2">ID</span>
+          {settings?.store_name || 'ZYHA'}<span className="text-blue-600 underline decoration-2">ID</span>
         </div>
         <div className="flex-1 max-w-xl mx-12 relative hidden md:block">
           <input type="text" placeholder="Cari produk impian Anda..." className="w-full bg-slate-100 rounded-full py-3 px-12 border-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 transition-all outline-none" />
@@ -330,10 +338,10 @@ export default function App() {
                   {paymentMethods.map(m => (
                     <div key={m.id} onClick={() => setSelectedPayment(m)} className={`p-4 border rounded-2xl flex justify-between items-center cursor-pointer transition-all ${selectedPayment?.id === m.id ? 'border-blue-600 bg-blue-50' : 'hover:border-blue-500'}`}>
                       <div className="flex items-center gap-3">
-                        {m.type === 'Bank' ? <Landmark className={selectedPayment?.id === m.id ? 'text-blue-600' : ''} /> : <QrCode className={selectedPayment?.id === m.id ? 'text-blue-600' : ''} />}
+                        {m.type === 'Bank' ? <Landmark className={selectedPayment?.id === m.id ? 'text-blue-600' : ''} /> : m.type === 'Midtrans' ? <CreditCard className={selectedPayment?.id === m.id ? 'text-blue-600' : ''} /> : <QrCode className={selectedPayment?.id === m.id ? 'text-blue-600' : ''} />}
                         <div>
                           <p className={`font-bold text-sm ${selectedPayment?.id === m.id ? 'text-blue-600' : ''}`}>{m.name}</p>
-                          <p className="text-xs text-slate-500">{m.account_number}</p>
+                          <p className="text-xs text-slate-500">{m.type === 'Midtrans' ? 'Otomatis (QRIS/CC/VA)' : m.account_number}</p>
                         </div>
                       </div>
                       <div className={`w-5 h-5 rounded-full border-2 ${selectedPayment?.id === m.id ? 'border-blue-600 bg-blue-600' : 'border-slate-200'}`}></div>
@@ -359,12 +367,9 @@ export default function App() {
                   <span className="text-blue-400">Rp {totalPrice.toLocaleString()}</span>
                 </div>
               </div>
-              <button 
-                onClick={handleConfirmPayment} 
-                disabled={isProcessing}
-                className={`w-full py-5 rounded-2xl font-black text-lg transition-all flex items-center justify-center gap-2 ${isProcessing ? 'bg-slate-700 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-200'} text-white`}
-              >
-                <CreditCard size={20} /> {isProcessing ? 'MEMPROSES...' : 'BAYAR AMAN (MIDTRANS)'}
+              <button onClick={handleConfirmPayment} className="w-full bg-blue-600 py-5 rounded-2xl font-black text-lg hover:bg-blue-700 transition-all flex items-center justify-center gap-2">
+                {selectedPayment?.type === 'Midtrans' ? <CreditCard size={20}/> : <MessageCircle size={20} />} 
+                {selectedPayment?.type === 'Midtrans' ? 'BAYAR OTOMATIS' : 'BAYAR VIA WA'}
               </button>
             </div>
           </div>
@@ -428,7 +433,7 @@ function ProductDisplay({ product, onClick, onAdd }: any) {
        <div className="relative aspect-[4/5] bg-slate-100 rounded-[2.5rem] overflow-hidden mb-6 shadow-sm cursor-pointer" onClick={onClick}>
           <ImageSlider images={Array.isArray(product.images) && product.images.length > 0 ? product.images : [product.image_url || product.image]} />
           <button onClick={(e) => { e.stopPropagation(); onAdd(); }} className="absolute bottom-6 right-6 p-4 bg-slate-900 text-white rounded-2xl opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0 transition-all duration-300 shadow-xl z-10">
-             <Plus />
+              <Plus />
           </button>
        </div>
        <div className="space-y-1 cursor-pointer" onClick={onClick}>
