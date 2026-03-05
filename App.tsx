@@ -234,17 +234,31 @@ export default function App() {
       {view === 'shop' && (
         <>
           <section className="pt-32 px-6 max-w-7xl mx-auto">
-            <div className="relative w-full h-[600px] bg-slate-900 rounded-[3rem] overflow-hidden shadow-2xl group">
-               <img src={settings?.banner_url || "https://lh3.googleusercontent.com/u/0/d/1CaDTuCbirLNG82DzbObMqE0Fy9dtxkZT"} className="absolute inset-0 w-full h-full object-cover opacity-60 scale-105 group-hover:scale-100 transition-transform duration-[2s]" alt="Banner" />
-               <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-black/80 to-transparent flex flex-col justify-end pb-20 px-16">
-                  <span className="text-blue-400 font-black tracking-[0.5em] uppercase mb-4 text-sm animate-pulse">Edisi Terbatas</span>
-                  <h2 className="text-7xl font-black text-white max-w-2xl leading-[1.1] mb-8 italic">"".</h2>
-                  <button className="bg-white text-slate-900 px-10 py-5 rounded-2xl font-black w-fit hover:bg-blue-600 hover:text-white transition-all shadow-2xl flex items-center gap-4 group/btn">
-                      BELANJA KOLEKSI <ChevronRight className="group-hover/btn:translate-x-2 transition-transform" />
-                  </button>
-               </div>
-            </div>
-          </section>
+  <div className="relative w-full h-[600px] bg-slate-900 rounded-[3rem] overflow-hidden shadow-2xl group">
+     {/* Image dibuat opacity-100 agar warna asli muncul sepenuhnya */}
+     <img 
+       src={settings?.banner_url || "https://lh3.googleusercontent.com/u/0/d/1CaDTuCbirLNG82DzbObMqE0Fy9dtxkZT"} 
+       className="absolute inset-0 w-full h-full object-cover opacity-100 scale-105 group-hover:scale-100 transition-transform duration-[2s]" 
+       alt="Banner" 
+     />
+     
+     {/* Container teks tanpa background gradien */}
+     <div className="absolute inset-0 flex flex-col justify-center px-16 z-10">
+        <div className="drop-shadow-[0_4px_10px_rgba(0,0,0,0.8)]"> {/* Efek bayangan agar teks terbaca di gambar terang */}
+           <span className="text-blue-400 font-black tracking-[0.5em] uppercase mb-4 text-sm animate-pulse block">
+              Edisi Terbatas
+           </span>
+           <h2 className="text-7xl font-black text-white max-w-2xl leading-[1.1] mb-8 italic">
+              GET READY BAGS.
+           </h2>
+        </div>
+        
+        <button className="bg-white text-slate-900 px-10 py-5 rounded-2xl font-black w-fit hover:bg-blue-600 hover:text-white transition-all shadow-2xl flex items-center gap-4 group/btn">
+            BELANJA KOLEKSI <ChevronRight className="group-hover/btn:translate-x-2 transition-transform" />
+        </button>
+     </div>
+  </div>
+</section>
 
           <section className="max-w-7xl mx-auto px-6 py-20">
              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
