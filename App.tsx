@@ -20,7 +20,7 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
   const [selectedVariant, setSelectedVariant] = useState<string>('');
-  const [mainImage, setMainImage] = useState<string>(''); // State tambahan untuk gambar utama
+  const [mainImage, setMainImage] = useState<string>(''); // State baru untuk gambar utama detail
   const [settings, setSettings] = useState<any>(null);
 
   // State Form Checkout
@@ -102,18 +102,11 @@ export default function App() {
   const openDetail = (product: any) => {
     setSelectedProduct(product);
     setSelectedVariant(product.variants?.[0]?.name || '');
-    // Set gambar utama ke gambar pertama produk saat dibuka
-    setMainImage(product.images?.[0] || product.image_url || product.image);
+    // Set gambar utama awal saat membuka detail
+    const initialImg = product.images?.[0] || product.image_url || product.image;
+    setMainImage(initialImg);
     setView('detail');
     window.scrollTo(0,0);
-  };
-
-  // Fungsi perbaikan klik variant
-  const handleVariantClick = (v: any) => {
-    setSelectedVariant(v.name);
-    if (v.image) {
-      setMainImage(v.image);
-    }
   };
 
   const saveOrderToDb = async (orderId: string, paymentMethodName: string) => {
@@ -283,10 +276,10 @@ export default function App() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-16">
             <div className="space-y-6">
               <div className="rounded-[3rem] overflow-hidden shadow-2xl bg-slate-100 aspect-square">
-                {/* Menggunakan forceImage dari state mainImage */}
+                {/* Mengirim forcedImage agar slider berubah saat varian diklik */}
                 <ImageSlider 
                   images={selectedProduct.images && Array.isArray(selectedProduct.images) && selectedProduct.images.length > 0 ? selectedProduct.images : [selectedProduct.image_url || selectedProduct.image]} 
-                  forceImage={mainImage}
+                  forcedImage={mainImage}
                 />
               </div>
             </div>
@@ -309,7 +302,10 @@ export default function App() {
                     {selectedProduct.variants.map((v: any, idx: number) => (
                       <button 
                         key={idx} 
-                        onClick={() => handleVariantClick(v)}
+                        onClick={() => {
+                          setSelectedVariant(v.name);
+                          if(v.image) setMainImage(v.image); // Update gambar utama saat varian diklik
+                        }}
                         className={`px-6 py-3 rounded-2xl font-bold border-2 transition-all flex items-center gap-3 ${selectedVariant === v.name ? 'border-blue-600 bg-blue-50 text-blue-600' : 'border-slate-100 bg-white text-slate-400'}`}
                       >
                         {v.image && <img src={v.image} className="w-6 h-6 rounded-lg object-cover" />}
@@ -395,24 +391,28 @@ export default function App() {
 
 // --- SUB COMPONENTS ---
 
-function ImageSlider({ images, forceImage }: { images: any, forceImage?: string }) {
+function ImageSlider({ images, forcedImage }: { images: any, forcedImage?: string }) {
   const [current, setCurrent] = useState(0);
   
   const safeImages = React.useMemo(() => {
-    if (Array.isArray(images)) return images.filter(img => typeof img === 'string' && img.trim() !== '');
-    if (typeof images === 'string' && images.trim() !== '') return [images];
-    return [];
-  }, [images]);
+    let list: string[] = [];
+    if (Array.isArray(images)) list = images.filter(img => typeof img === 'string' && img.trim() !== '');
+    else if (typeof images === 'string' && images.trim() !== '') list = [images];
 
-  // Efek untuk merespon perubahan forceImage (ketika variant diklik)
-  useEffect(() => {
-    if (forceImage) {
-      const index = safeImages.indexOf(forceImage);
-      if (index !== -1) {
-        setCurrent(index);
-      }
+    // Jika ada forcedImage (dari klik varian) dan tidak ada di list, masukkan ke list agar bisa ditampilkan
+    if (forcedImage && !list.includes(forcedImage)) {
+      return [forcedImage, ...list];
     }
-  }, [forceImage, safeImages]);
+    return list;
+  }, [images, forcedImage]);
+
+  // Effect untuk mengganti gambar slider jika forcedImage berubah
+  useEffect(() => {
+    if (forcedImage) {
+      const index = safeImages.indexOf(forcedImage);
+      if (index !== -1) setCurrent(index);
+    }
+  }, [forcedImage, safeImages]);
 
   useEffect(() => {
     if (safeImages.length <= 1) return;
