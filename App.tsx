@@ -245,10 +245,10 @@ export default function App() {
      {/* Container teks tanpa background gradien */}
      <div className="absolute inset-0 flex flex-col justify-center px-16 z-10">
         <div className="drop-shadow-[0_4px_10px_rgba(0,0,0,0.8)]"> {/* Efek bayangan agar teks terbaca di gambar terang */}
-           <span className="text-yellow-400 font-black tracking-[0.5em] uppercase mb-4 text-sm animate-pulse block">
+           <span className="text-black-400 font-black tracking-[0.5em] uppercase mb-4 text-sm animate-pulse block">
               Edisi Terbatas
            </span>
-           <h2 className="text-7xl font-black text-white max-w-2xl leading-[1.1] mb-8 italic">
+           <h2 className="text-7xl font-black text-blue max-w-2xl leading-[1.1] mb-8 italic">
               GET READY BAGS.
            </h2>
         </div>
