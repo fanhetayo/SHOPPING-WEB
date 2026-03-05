@@ -114,8 +114,8 @@ export default function App() {
       if (selectedPayment.type === 'Midtrans') {
         const orderId = `ZYHA-${Date.now()}`;
         
-        // Memanggil Supabase Edge Function
-        const { data: functionData, error: functionError } = await supabase.functions.invoke('payment', {
+        // Memanggil Supabase Edge Function (Nama fungsi disesuaikan: rapid-api)
+        const { data: functionData, error: functionError } = await supabase.functions.invoke('rapid-api', {
           body: {
             orderId: orderId,
             grossAmount: totalPrice,
@@ -127,8 +127,8 @@ export default function App() {
           }
         });
 
-        if (functionError) throw new Error(functionError.message || "Gagal menghubungi server pembayaran");
-        if (!functionData || !functionData.token) throw new Error("Gagal mendapatkan token pembayaran");
+        if (functionError) throw new Error("Gagal mengirim permintaan ke server pembayaran (Rapid-API).");
+        if (!functionData || !functionData.token) throw new Error("Gagal mendapatkan token pembayaran dari Midtrans.");
 
         // Simpan data order ke Database dengan status 'pending'
         await supabase.from('orders').insert([{
@@ -143,25 +143,29 @@ export default function App() {
         }]);
 
         // Eksekusi Midtrans Snap Popup
-        window.snap.pay(functionData.token, {
-          onSuccess: async (result: any) => {
-            await supabase.from('orders').update({ status: 'paid' }).eq('id', orderId);
-            alert("Pembayaran Berhasil! Pesanan Anda akan segera diproses.");
-            setCart([]);
-            setView('shop');
-          },
-          onPending: (result: any) => {
-            alert("Pesanan disimpan. Silakan selesaikan pembayaran Anda.");
-            setCart([]);
-            setView('shop');
-          },
-          onError: (result: any) => {
-            alert("Pembayaran gagal! Silakan coba lagi.");
-          },
-          onClose: () => {
-            alert("Anda menutup jendela pembayaran sebelum selesai.");
-          }
-        });
+        if (window.snap) {
+          window.snap.pay(functionData.token, {
+            onSuccess: async (result: any) => {
+              await supabase.from('orders').update({ status: 'paid' }).eq('id', orderId);
+              alert("Pembayaran Berhasil! Pesanan Anda akan segera diproses.");
+              setCart([]);
+              setView('shop');
+            },
+            onPending: (result: any) => {
+              alert("Pesanan disimpan. Silakan selesaikan pembayaran Anda di aplikasi bank.");
+              setCart([]);
+              setView('shop');
+            },
+            onError: (result: any) => {
+              alert("Pembayaran gagal! Silakan coba lagi.");
+            },
+            onClose: () => {
+              alert("Anda menutup jendela pembayaran sebelum selesai.");
+            }
+          });
+        } else {
+          alert("Sistem pembayaran sedang dimuat, mohon tunggu sebentar lalu coba lagi.");
+        }
         return;
       }
 
