@@ -248,7 +248,7 @@ export default function App() {
 
           <section className="max-w-7xl mx-auto px-6 py-20">
              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                {(settings?.categories || ["Elektronik", "Fashion", "Sepatu"]).map((cat: string) => (
+                {(settings?.categories || ["Totebag", "Shoulder Bag", "Slingbag"]).map((cat: string) => (
                     <CategoryCard key={cat} name={cat} icon="✨" />
                 ))}
              </div>
