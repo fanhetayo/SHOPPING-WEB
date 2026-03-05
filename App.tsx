@@ -248,7 +248,7 @@ export default function App() {
            <span className="text-black-400 font-black tracking-[0.5em] uppercase mb-4 text-sm animate-pulse block">
               Edisi Terbatas
            </span>
-           <h2 className="text-7xl font-black text-blue max-w-2xl leading-[1.1] mb-8 italic">
+           <h2 className="text-7xl font-blue text-yellow max-w-2xl leading-[1.1] mb-8 italic">
               GET READY BAGS.
            </h2>
         </div>
