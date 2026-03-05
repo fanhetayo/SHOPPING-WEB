@@ -235,7 +235,7 @@ export default function App() {
         <>
           <section className="pt-32 px-6 max-w-7xl mx-auto">
             <div className="relative w-full h-[600px] bg-slate-900 rounded-[3rem] overflow-hidden shadow-2xl group">
-               <img src={settings?.banner_url || "https://images.unsplash.com/photo-1549298916-b41d501d3772?q=80&w=2012"} className="absolute inset-0 w-full h-full object-cover opacity-60 scale-105 group-hover:scale-100 transition-transform duration-[2s]" alt="Banner" />
+               <img src={settings?.banner_url || "https://lh3.googleusercontent.com/u/0/d/1CaDTuCbirLNG82DzbObMqE0Fy9dtxkZT"} className="absolute inset-0 w-full h-full object-cover opacity-60 scale-105 group-hover:scale-100 transition-transform duration-[2s]" alt="Banner" />
                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-center px-16">
                   <span className="text-blue-400 font-black tracking-[0.5em] uppercase mb-4 text-sm animate-pulse">Edisi Terbatas</span>
                   <h2 className="text-7xl font-black text-white max-w-2xl leading-[1.1] mb-8 italic">STEP INTO THE FUTURE.</h2>
