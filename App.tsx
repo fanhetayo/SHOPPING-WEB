@@ -45,16 +45,17 @@ export default function App() {
     const midtransScriptUrl = 'https://app.sandbox.midtrans.com/snap/snap.js';
     const script = document.createElement('script');
     script.src = midtransScriptUrl;
+    script.async = true;
     
     const fetchSettings = async () => {
         const { data } = await supabase.from('settings').select('*').single();
         if(data) {
             setSettings(data);
             script.setAttribute('data-client-key', data.midtrans_client_key);
+            document.body.appendChild(script);
         }
     };
     fetchSettings();
-    document.body.appendChild(script);
 
     return () => { 
         const s = document.querySelector(`script[src="${midtransScriptUrl}"]`);
@@ -113,29 +114,24 @@ export default function App() {
       if (selectedPayment.type === 'Midtrans') {
         const orderId = `ZYHA-${Date.now()}`;
         
-        // Panggil Supabase Edge Function Anda untuk mendapatkan Snap Token
-        const { data: functionData, error: functionError } = await supabase.functions.invoke('midtrans-payment', {
+        // Memanggil Supabase Edge Function
+        const { data: functionData, error: functionError } = await supabase.functions.invoke('payment', {
           body: {
-            order_id: orderId,
-            gross_amount: totalPrice,
-            customer_details: {
+            orderId: orderId,
+            grossAmount: totalPrice,
+            customerDetails: {
               first_name: customerName,
               phone: customerPhone,
               address: customerAddress
-            },
-            item_details: cart.map(item => ({
-              id: item.id,
-              price: item.price,
-              quantity: 1,
-              name: item.title
-            }))
+            }
           }
         });
 
-        if (functionError) throw functionError;
+        if (functionError) throw new Error(functionError.message || "Gagal menghubungi server pembayaran");
+        if (!functionData || !functionData.token) throw new Error("Gagal mendapatkan token pembayaran");
 
-        // Simpan ke DB sebagai 'pending'
-        const { data: orderDB } = await supabase.from('orders').insert([{
+        // Simpan data order ke Database dengan status 'pending'
+        await supabase.from('orders').insert([{
             id: orderId,
             customer_name: customerName,
             customer_address: customerAddress,
@@ -144,22 +140,27 @@ export default function App() {
             total_price: totalPrice,
             payment_method: 'Midtrans',
             status: 'pending'
-        }]).select().single();
+        }]);
 
-        // Tampilkan Snap Popup
+        // Eksekusi Midtrans Snap Popup
         window.snap.pay(functionData.token, {
           onSuccess: async (result: any) => {
             await supabase.from('orders').update({ status: 'paid' }).eq('id', orderId);
-            alert("Pembayaran Berhasil!");
+            alert("Pembayaran Berhasil! Pesanan Anda akan segera diproses.");
             setCart([]);
             setView('shop');
           },
           onPending: (result: any) => {
-            alert("Menunggu pembayaran...");
+            alert("Pesanan disimpan. Silakan selesaikan pembayaran Anda.");
             setCart([]);
             setView('shop');
           },
-          onError: (result: any) => alert("Pembayaran gagal!")
+          onError: (result: any) => {
+            alert("Pembayaran gagal! Silakan coba lagi.");
+          },
+          onClose: () => {
+            alert("Anda menutup jendela pembayaran sebelum selesai.");
+          }
         });
         return;
       }
@@ -196,7 +197,7 @@ export default function App() {
 
     } catch (err: any) {
       console.error(err);
-      alert("Gagal memproses pesanan: " + err.message);
+      alert("Gagal memproses pesanan: " + (err.message || "Terjadi kesalahan sistem"));
     }
   };
 
