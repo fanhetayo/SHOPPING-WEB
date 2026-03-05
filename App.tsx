@@ -41,12 +41,11 @@ export default function App() {
       s0.parentNode?.insertBefore(s1, s0);
     })();
 
-    // Midtrans Snap Script
-    const midtransScriptUrl = 'https://app.sandbox.midtrans.com/snap/snap.js'; // Gunakan 'app.midtrans.com' untuk production
+    // Midtrans Snap Script (SANDBOX)
+    const midtransScriptUrl = 'https://app.sandbox.midtrans.com/snap/snap.js';
     const script = document.createElement('script');
     script.src = midtransScriptUrl;
     
-    // Ambil settings untuk Midtrans Client Key
     const fetchSettings = async () => {
         const { data } = await supabase.from('settings').select('*').single();
         if(data) {
@@ -57,7 +56,10 @@ export default function App() {
     fetchSettings();
     document.body.appendChild(script);
 
-    return () => { document.body.removeChild(script); }
+    return () => { 
+        const s = document.querySelector(`script[src="${midtransScriptUrl}"]`);
+        if(s) document.body.removeChild(s); 
+    }
   }, []);
 
   useEffect(() => {
@@ -69,10 +71,9 @@ export default function App() {
     };
     getData();
 
-    const sub = supabase.channel('api-realtime')
+    const sub = supabase.channel('api-realtime-v2')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, getData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_methods' }, getData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, () => window.location.reload())
       .subscribe();
     return () => { supabase.removeChannel(sub); };
   }, []);
@@ -101,19 +102,41 @@ export default function App() {
     window.scrollTo(0,0);
   };
 
-  // --- FITUR PEMBAYARAN (MIDTRANS & WHATSAPP) ---
+  // --- FITUR PEMBAYARAN MIDTRANS (SANDBOX) ---
   const handleConfirmPayment = async () => {
     if (!customerName || !customerAddress || !customerPhone || !selectedPayment) {
       return alert("Mohon lengkapi data diri dan pilih metode pembayaran!");
     }
 
     try {
-      // Jika menggunakan Midtrans
+      // 1. Logic untuk MIDTRANS
       if (selectedPayment.type === 'Midtrans') {
-        if (!settings?.midtrans_client_key) return alert("Sistem Midtrans belum dikonfigurasi oleh admin.");
+        const orderId = `ZYHA-${Date.now()}`;
         
-        // Simpan Order ke DB dahulu
-        const { data: orderData, error } = await supabase.from('orders').insert([{
+        // Panggil Supabase Edge Function Anda untuk mendapatkan Snap Token
+        const { data: functionData, error: functionError } = await supabase.functions.invoke('midtrans-payment', {
+          body: {
+            order_id: orderId,
+            gross_amount: totalPrice,
+            customer_details: {
+              first_name: customerName,
+              phone: customerPhone,
+              address: customerAddress
+            },
+            item_details: cart.map(item => ({
+              id: item.id,
+              price: item.price,
+              quantity: 1,
+              name: item.title
+            }))
+          }
+        });
+
+        if (functionError) throw functionError;
+
+        // Simpan ke DB sebagai 'pending'
+        const { data: orderDB } = await supabase.from('orders').insert([{
+            id: orderId,
             customer_name: customerName,
             customer_address: customerAddress,
             customer_phone: customerPhone,
@@ -123,24 +146,25 @@ export default function App() {
             status: 'pending'
         }]).select().single();
 
-        if (error) throw error;
-
-        // Panggil Snap Popup (Integrasi Backend Required untuk Token, ini simulasi trigger snap)
-        // Note: Idealnya token di-generate dari Server-Side.
-        window.snap.pay('ISI_DENGAN_SNAP_TOKEN_DARI_BACKEND', {
-            onSuccess: async (result: any) => {
-                await supabase.from('orders').update({ status: 'paid' }).eq('id', orderData.id);
-                alert("Pembayaran Berhasil!");
-                setCart([]);
-                setView('shop');
-            },
-            onPending: (result: any) => alert("Menunggu Pembayaran..."),
-            onError: (result: any) => alert("Pembayaran Gagal!")
+        // Tampilkan Snap Popup
+        window.snap.pay(functionData.token, {
+          onSuccess: async (result: any) => {
+            await supabase.from('orders').update({ status: 'paid' }).eq('id', orderId);
+            alert("Pembayaran Berhasil!");
+            setCart([]);
+            setView('shop');
+          },
+          onPending: (result: any) => {
+            alert("Menunggu pembayaran...");
+            setCart([]);
+            setView('shop');
+          },
+          onError: (result: any) => alert("Pembayaran gagal!")
         });
         return;
       }
 
-      // 1. Simpan ke Database untuk Metode Manual
+      // 2. Logic untuk MANUAL (WhatsApp)
       const { error } = await supabase.from('orders').insert([{
         customer_name: customerName,
         customer_address: customerAddress,
@@ -153,10 +177,8 @@ export default function App() {
 
       if (error) throw error;
 
-      // 2. Format Pesan WhatsApp
       const adminWA = "628123456789"; 
       const itemText = cart.map(it => `- ${it.title} (${it.selectedVariant || 'Default'}): Rp ${it.price.toLocaleString()}`).join('%0A');
-      
       const message = `*PESANAN BARU - ZYHA ID*%0A%0A` +
                       `*Data Pelanggan:*%0A` +
                       `Nama: ${customerName}%0A` +
@@ -167,15 +189,14 @@ export default function App() {
                       `*Metode Bayar:* ${selectedPayment.name}%0A%0A` +
                       `Mohon segera diproses. Terima kasih!`;
 
-      // 3. Redirect ke WA & Reset State
       window.open(`https://wa.me/${adminWA}?text=${message}`, '_blank');
       setCart([]);
       setView('shop');
-      alert("Pesanan terkirim ke admin! Silakan konfirmasi di WhatsApp.");
+      alert("Pesanan terkirim ke admin via WhatsApp!");
 
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Gagal memproses pesanan.");
+      alert("Gagal memproses pesanan: " + err.message);
     }
   };
 
@@ -208,7 +229,7 @@ export default function App() {
                <button onClick={() => setShowCart(false)} className="p-2 bg-slate-100 rounded-full"><X/></button>
             </div>
             <div className="flex-1 space-y-4 overflow-y-auto">
-               {cart.map(item => (
+               {cart.length === 0 ? <p className="text-center text-slate-400 py-10">Keranjang masih kosong.</p> : cart.map(item => (
                  <CartItem key={item.cartId} title={item.title} variant={item.selectedVariant} price={`Rp ${item.price.toLocaleString()}`} onRemove={() => removeFromCart(item.cartId)} />
                ))}
             </div>
@@ -340,7 +361,7 @@ export default function App() {
                       <div className="flex items-center gap-3">
                         {m.type === 'Bank' ? <Landmark className={selectedPayment?.id === m.id ? 'text-blue-600' : ''} /> : m.type === 'Midtrans' ? <CreditCard className={selectedPayment?.id === m.id ? 'text-blue-600' : ''} /> : <QrCode className={selectedPayment?.id === m.id ? 'text-blue-600' : ''} />}
                         <div>
-                          <p className={`font-bold text-sm ${selectedPayment?.id === m.id ? 'text-blue-600' : ''}`}>{m.name}</p>
+                          <p className={`font-bold text-sm ${selectedPayment?.id === m.id ? 'text-blue-600' : ''}`}>{m.name || (m.type === 'Midtrans' ? 'Midtrans' : '')}</p>
                           <p className="text-xs text-slate-500">{m.type === 'Midtrans' ? 'Otomatis (QRIS/CC/VA)' : m.account_number}</p>
                         </div>
                       </div>
@@ -376,7 +397,6 @@ export default function App() {
         </section>
       )}
 
-      {/* FOOTER SPACER */}
       <div className="h-20"></div>
     </div>
   );
