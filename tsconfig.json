@@ -16,6 +16,6 @@
     "noEmit": true,
     "jsx": "react-jsx"
   },
-  "include": ["main.tsx"],
+  "include": ["main.tsx", "App.tsx", "Admin.tsx", "components/**/*.tsx", "shared/**/*.ts", "supabaseClient.ts"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

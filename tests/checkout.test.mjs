@@ -1,0 +1,13 @@
+import ts from 'typescript';import fs from 'node:fs';import assert from 'node:assert/strict';
+let source=fs.readFileSync('supabase/functions/rapid-api/index.ts','utf8').replace(/^import .*$/gm,'');
+const js=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText;
+let handler;let calls=0;
+const db={from(){calls++;throw Error('Unexpected database access') }};
+new Function('serve','createClient','Deno',js)(fn=>handler=fn,()=>db,{env:{get:n=>n==='MIDTRANS_SERVER_KEY'?'test-secret':n==='MIDTRANS_ENVIRONMENT'?'sandbox':'test'}});
+const send=body=>handler(new Request('http://localhost',{method:'POST',body:JSON.stringify(body)}));
+assert.equal((await handler(new Request('http://localhost'))).status,405);
+assert.equal((await send({transaction_status:'settlement',order_id:'x',signature_key:'fake'})).status,401);
+assert.equal((await send({action:'manual-checkout'})).status,400);
+const body={action:'manual-checkout',checkout_key:'00000000-0000-4000-8000-000000000001',payment_method_id:'00000000-0000-4000-8000-000000000002',customer:{name:'Test',phone:'08123456789',address:'Address'},items:[{product_id:'00000000-0000-4000-8000-000000000003',quantity:1.5}]};
+assert.equal((await send(body)).status,400);body.items[0].quantity=0;assert.equal((await send(body)).status,400);body.items=[];assert.equal((await send(body)).status,400);assert.equal(calls,0);
+console.log('PASS: unsupported HTTP method, forged webhook, missing checkout identity, fractional/zero quantity and empty cart rejected before DB access');

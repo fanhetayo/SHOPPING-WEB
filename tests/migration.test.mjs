@@ -1,0 +1,28 @@
+import { PGlite } from '@electric-sql/pglite';
+import fs from 'node:fs';
+const db = new PGlite();
+await db.exec(`create role anon; create role authenticated; create role service_role bypassrls; create schema auth; create table auth.users(id uuid primary key); create function auth.uid() returns uuid language sql as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$; create schema storage; create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]); create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text); alter table storage.objects enable row level security;`);
+const sql=fs.readFileSync('supabase/migrations/20261009170000_secure_checkout_schema.sql','utf8').replace('create extension if not exists pgcrypto;','');
+await db.exec(sql);
+await db.exec('grant select(midtrans_server_key) on settings to anon, authenticated');
+await db.exec(sql);
+await db.exec(`insert into auth.users values ('00000000-0000-4000-8000-000000000099'); insert into admin_users(user_id) values ('00000000-0000-4000-8000-000000000099'); grant usage on schema public,auth to anon,authenticated,service_role; set role authenticated; select set_config('request.jwt.claim.sub','00000000-0000-4000-8000-000000000099',false); select id,title,is_active from products; select id,total_price,status from orders; reset role;`);
+const key='00000000-0000-4000-8000-000000000001';
+const payload={customer_name:'Test',customer_address:'Address',customer_phone:'08123456789',items:[],total_price:10000,payment_method:'Midtrans',midtrans_order_id:'ZYHA-'+key};
+const query=()=>db.query('select claim_checkout($1,$2,$3) result',[key,'hash',JSON.stringify(payload)]);
+const a=(await query()).rows[0].result; const b=(await query()).rows[0].result;
+if(!a.created || b.created || a.order.id!==b.order.id || a.order.midtrans_order_id!==payload.midtrans_order_id) throw Error('Idempotency contract failed');
+const lock=()=>db.query('select claim_payment($1) acquired',[a.order.id]);
+if(!(await lock()).rows[0].acquired || (await lock()).rows[0].acquired) throw Error('Payment claim failed');
+let mismatch=false; try {await db.query('select claim_checkout($1,$2,$3)',[key,'different',JSON.stringify(payload)])}catch {mismatch=true} if(!mismatch) throw Error('Hash mismatch accepted');
+const grants=await db.query(`select has_column_privilege('anon','public.settings','midtrans_server_key','SELECT') anon_secret, has_column_privilege('authenticated','public.settings','midtrans_server_key','SELECT') auth_secret,has_table_privilege('anon','public.orders','INSERT') guest_insert,has_function_privilege('anon','public.claim_checkout(uuid,text,jsonb)','EXECUTE') guest_rpc`);
+if(Object.values(grants.rows[0]).some(Boolean))throw Error('Unsafe grants');
+console.log('PASS: fresh schema, repeat migration, checkout reuse, mismatch rejection, exclusive payment claim, private secret/RPC grants');
+await db.exec('alter table orders drop column snap_token');
+await db.exec(sql);
+if ((await db.query('select count(*)::int n from orders')).rows[0].n !== 1) throw Error('Migration lost existing order');
+await db.exec('alter table products alter column price type bigint');
+let rejected=false;try {await db.exec(sql)}catch{rejected=true;await db.exec('rollback')}
+if(!rejected)throw Error('Incompatible schema accepted');
+console.log('PASS: missing column repaired without losing rows; incompatible schema rejected transactionally');
+await db.close();
